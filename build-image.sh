@@ -40,9 +40,6 @@ REPO="${1:-minimal-java}"
 PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 BUILDER="chisel-builder"
 
-# Dockerfile targets to build, in series order (smallest first).
-TARGETS=(ubuntu jre app aot)
-
 # Multi-platform builds and QEMU emulation need the docker-container driver;
 # the default "docker" driver can't do either. Create the builder on demand.
 if ! docker buildx inspect "${BUILDER}" >/dev/null 2>&1; then
@@ -50,24 +47,29 @@ if ! docker buildx inspect "${BUILDER}" >/dev/null 2>&1; then
   docker buildx create --name "${BUILDER}" --driver docker-container --bootstrap >/dev/null
 fi
 
-# Shared buildx args; per-target --target/--tag are appended in the loop below.
-common_args=(
-  --builder "${BUILDER}"
-  --platform "${PLATFORMS}"
-)
+# Build one Dockerfile target multi-arch and load it into the local Docker store
+# as ${REPO}:<target>.
+build() {
+  local target="$1"
+  echo
+  echo ">>> ${REPO}:${target} (--target ${target})"
+  docker buildx build \
+    --builder "${BUILDER}" \
+    --platform "${PLATFORMS}" \
+    --target "${target}" --tag "${REPO}:${target}" --load .
+}
 
-echo "Building ${REPO} series: ${TARGETS[*]}"
+echo "Building ${REPO} series: ubuntu jre app aot"
 echo "  platforms: ${PLATFORMS}"
 echo "  output:    load into local Docker"
 
-for target in "${TARGETS[@]}"; do
-  tag="${REPO}:${target}"
-  echo
-  echo ">>> ${tag} (--target ${target})"
-  # The jre target's jlink stage runs emulated for the non-native arch, so its
-  # first build is noticeably slower than base.
-  docker buildx build "${common_args[@]}" --target "${target}" --tag "${tag}" --load .
-done
+# Build the series, smallest first. The jre build runs a RUN step (trimming the
+# JRE launchers) that executes emulated for the non-native arch, so its first
+# build is noticeably slower than the others.
+build ubuntu
+build jre
+build app
+build aot
 
 # Size comparison: full Ubuntu base vs each chiseled image, side by side.
 # Delegated to image-stats.sh, which is also runnable on its own to re-check
