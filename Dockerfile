@@ -110,7 +110,7 @@ COPY --from=build /build/extracted/snapshot-dependencies/ ./
 COPY --from=build /build/extracted/application/ ./
 EXPOSE 8080
 # Numeric non-root UID:GID — no /etc/passwd needed, and Kubernetes runAsNonRoot
-# can verify it. Defining ENTRYPOINT also resets jre's inherited "-version" CMD.
+# can verify it.
 USER 10001:10001
 ENTRYPOINT ["java", "-jar", "application.jar"]
 
