@@ -9,24 +9,16 @@
 #   aot    — app + a JDK 25 AOT cache (training run) for faster startup
 #
 # Each is built multi-arch (linux/amd64 + linux/arm64) so it runs on both
-# Apple Silicon Macs and amd64 Linux, and tagged ${REPO}:<target>.
+# Apple Silicon Macs and amd64 Linux, and tagged minimal-java:<target>.
 #
 # Builds both arches and loads each manifest into the local Docker store so you
 # can run them immediately. Loading a multi-arch manifest requires the containerd
 # image store (Docker Desktop: Settings > General > "Use containerd for pulling
 # and storing images"); the legacy image store can't hold one.
 #
-#   ./build-image.sh           # build minimal-java:{ubuntu,jre,app,aot}
-#   ./build-image.sh myrepo    # tag the series myrepo:<target> instead
+#   ./build-image.sh    # build minimal-java:{ubuntu,jre,app,aot}
 #
 # To publish the built series to a registry, build first, then ./push-image.sh.
-#
-# Usage:
-#   ./build-image.sh [REPO]
-#
-# Environment overrides:
-#   PLATFORMS        comma-separated platforms
-#                    (default: linux/amd64,linux/arm64)
 #
 # Image versions (Ubuntu, JRE, chisel) are NOT set here — they live in the
 # Dockerfile's ARG lines, the single source of truth. To change one, edit the
@@ -36,8 +28,6 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-REPO="${1:-minimal-java}"
-PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 BUILDER="chisel-builder"
 
 # Multi-platform builds and QEMU emulation need the docker-container driver;
@@ -48,20 +38,16 @@ if ! docker buildx inspect "${BUILDER}" >/dev/null 2>&1; then
 fi
 
 # Build one Dockerfile target multi-arch and load it into the local Docker store
-# as ${REPO}:<target>.
+# as minimal-java:<target>.
 build() {
   local target="$1"
   echo
-  echo ">>> ${REPO}:${target} (--target ${target})"
+  echo ">>> minimal-java:${target} (--target ${target})"
   docker buildx build \
     --builder "${BUILDER}" \
-    --platform "${PLATFORMS}" \
-    --target "${target}" --tag "${REPO}:${target}" --load .
+    --platform linux/amd64,linux/arm64 \
+    --target "${target}" --tag "minimal-java:${target}" --load .
 }
-
-echo "Building ${REPO} series: ubuntu jre app aot"
-echo "  platforms: ${PLATFORMS}"
-echo "  output:    load into local Docker"
 
 # Build the series, smallest first. The jre build runs a RUN step (trimming the
 # JRE launchers) that executes emulated for the non-native arch, so its first
@@ -75,4 +61,4 @@ build aot
 # Delegated to image-stats.sh, which is also runnable on its own to re-check
 # sizes later.
 echo
-PLATFORMS="${PLATFORMS}" ./image-stats.sh "${REPO}"
+./image-stats.sh
