@@ -1,5 +1,48 @@
 # minimal-java
+
 Experiments in building minimal, secure, and reproducible Java container runtimes.
+
+A hands-on, teaching-oriented project showing how small, secure, and fast a Java
+web app's container can get — built up **one technique at a time**.
+
+The application is a typical Spring Boot 4 service: Java 25, Spring MVC exposing a
+REST API, backed by Spring Data JPA / Hibernate over an H2 database with Flyway
+migrations (it returns a random quote). It's intentionally small so the focus stays
+on the **`Dockerfile`**, which defines a *series* of progressively richer images —
+each adding a single idea on top of the previous one — so you can see what each
+layer costs and what it contributes.
+
+## Highlights
+
+- **~2.5 MB base** — chiseled Ubuntu: no shell, no package manager, `libc6` only.
+- **~119 MB for the whole app** — a complete Spring Boot 4 service.
+- **~3.6× faster startup** — ~1.8 s → ~0.5 s via a JDK 25 AOT cache.
+- **Multi-arch** — `linux/amd64` + `linux/arm64` from one command.
+- **Reproducible & self-contained** — in-container build, pinned versions.
+
+## The image series
+
+Each image is a named `--target` in one multi-stage `Dockerfile`, built multi-arch
+(amd64 + arm64) by `./build-image.sh` (which also prints this size comparison). Each
+adds one technique on top of the previous:
+
+| Image                 | Builds on | Adds (the technique)                                                       | Size (amd64) | Startup |
+| --------------------- | --------- | -------------------------------------------------------------------------- | ------------ | ------- |
+| `ubuntu:26.04` (full) | —         | the whole distro, for reference                                            | ~157 MB      | —       |
+| `minimal-java:ubuntu` | `scratch` | Canonical **chisel** — built bottom-up from package *slices* (no shell/apt) | ~2.5 MB     | —       |
+| `minimal-java:jre`    | `:ubuntu` | **trimmed Temurin JRE 25** — standalone launchers removed                  | ~65 MB       | —       |
+| `minimal-java:app`    | `:jre`    | Spring Boot **layered jar**, exploded into cache-friendly layers           | ~119 MB      | ~1.8 s  |
+| `minimal-java:aot`    | `:app`    | **JDK 25 AOT cache** (Project Leyden), trained at build time               | ~146 MB      | ~0.5 s  |
+
+See **[Resources](#resources)** below for talks that go deep on chisel and AOT.
+
+## Quick start
+
+```bash
+./build-image.sh        # build ubuntu/jre/app/aot multi-arch + print size comparison
+./run-image.sh          # run minimal-java:aot -> http://localhost:8080
+curl localhost:8080     # {"author":"...","id":N,"quote":"..."}
+```
 
 ## Resources
 
