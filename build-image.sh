@@ -6,6 +6,7 @@
 #   ubuntu — chiseled Ubuntu (base-files + libc6) only
 #   jre    — chiseled ubuntu + a trimmed Eclipse Temurin JRE 25
 #   app    — jre + the Spring Boot app, exploded into Spring Boot layers
+#   aot    — app + a JDK 25 AOT cache (training run) for faster startup
 #
 # Each is built multi-arch (linux/amd64 + linux/arm64) so it runs on both
 # Apple Silicon Macs and amd64 Linux, and tagged ${REPO}:<target>.
@@ -48,7 +49,7 @@ PUSH="${PUSH:-false}"
 BUILDER="chisel-builder"
 
 # Dockerfile targets to build, in series order (smallest first).
-TARGETS=(ubuntu jre app)
+TARGETS=(ubuntu jre app aot)
 
 # Multi-platform builds and QEMU emulation need the docker-container driver;
 # the default "docker" driver can't do either. Create the builder on demand.

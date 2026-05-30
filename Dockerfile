@@ -108,3 +108,14 @@ EXPOSE 8080
 # Defining ENTRYPOINT here resets the "-version" CMD inherited from jre, so no
 # explicit CMD reset is needed.
 ENTRYPOINT ["/opt/java/openjdk/bin/java", "-jar", "application.jar"]
+
+# ---------------------------------------------------------------------------
+# Image: aot — app + a JDK 25 AOT cache for faster startup. A build-time
+# "training run" starts the app, lets Spring refresh the context, then exits
+# (-Dspring.context.exit=onRefresh), recording loaded classes into app.aot
+# (JEP 514 one-step -XX:AOTCacheOutput). The runtime then loads that cache via
+# -XX:AOTCache. RUN uses exec form because the chiseled image has no shell.
+# ---------------------------------------------------------------------------
+FROM app AS aot
+RUN ["/opt/java/openjdk/bin/java", "-XX:AOTCacheOutput=app.aot", "-Dspring.context.exit=onRefresh", "-jar", "application.jar"]
+ENTRYPOINT ["/opt/java/openjdk/bin/java", "-XX:AOTCache=app.aot", "-jar", "application.jar"]
