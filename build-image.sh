@@ -48,12 +48,6 @@ PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 PUSH="${PUSH:-false}"
 BUILDER="chisel-builder"
 
-# buildx reads the image versions straight from the Dockerfile's ARG defaults, so
-# the build needs nothing from here. We read just the Ubuntu version back — and only
-# for the size-comparison step below, which pulls the full ubuntu:${UBUNTU_VERSION}
-# base for reference (a plain docker pull, outside the build, so it can't see ARGs).
-UBUNTU_VERSION="$(sed -n 's/^ARG UBUNTU_VERSION=//p' Dockerfile)"
-
 # Dockerfile targets to build, in series order (smallest first).
 TARGETS=(ubuntu jre app aot)
 
@@ -71,7 +65,6 @@ common_args=(
 )
 
 echo "Building ${REPO} series: ${TARGETS[*]}"
-echo "  ubuntu:    ${UBUNTU_VERSION}"
 echo "  platforms: ${PLATFORMS}"
 
 if [[ "${PUSH}" == "true" ]]; then
@@ -94,23 +87,9 @@ for target in "${TARGETS[@]}"; do
 done
 
 # Size comparison: full Ubuntu base vs each chiseled image, side by side. Skip
-# on push (the images aren't in the local store to inspect).
+# on push (the images aren't in the local store to inspect). Delegated to
+# image-stats.sh, which is also runnable on its own to re-check sizes later.
 if [[ "${PUSH}" != "true" ]]; then
-  # Pull the full Ubuntu base image for the same platforms so we can show a
-  # like-for-like (uncompressed disk usage) comparison against the chiseled
-  # results.
-  IFS=',' read -ra _platforms <<< "${PLATFORMS}"
-  for _p in "${_platforms[@]}"; do
-    docker pull --quiet --platform "${_p}" "ubuntu:${UBUNTU_VERSION}" >/dev/null
-  done
-
   echo
-  echo "Size comparison (ubuntu base -> chiseled series):"
-  echo
-  # --tree prints per-architecture sizes in MB (no manual formatting needed).
-  docker image ls --tree "ubuntu:${UBUNTU_VERSION}"
-  for target in "${TARGETS[@]}"; do
-    echo
-    docker image ls --tree "${REPO}:${target}"
-  done
+  PLATFORMS="${PLATFORMS}" ./image-stats.sh "${REPO}"
 fi
