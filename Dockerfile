@@ -1,16 +1,11 @@
 # syntax=docker/dockerfile:1
 
-# Ubuntu version used for both the builder base image and the matching
-# chisel-releases slice branch. Declared before FROM so it can drive the tag.
+# Build configuration — override any with `--build-arg NAME=value`. These feed
+# the FROM tags below: ubuntu:${UBUNTU_VERSION}, eclipse-temurin:${JAVA_VERSION}-*,
+# the chisel-releases branch ubuntu-${UBUNTU_VERSION}, and the chisel download.
 ARG UBUNTU_VERSION=26.04
-
-# Temurin JRE image we copy the runtime from. Declared before any FROM (global
-# scope) so it can be referenced in the jre-dist stage's FROM line.
-ARG JRE_IMAGE=eclipse-temurin:25-jre
-
-# Temurin JDK image used to compile the app and extract its layered jar.
-# Declared globally so the build stage's FROM can reference it.
-ARG JDK_IMAGE=eclipse-temurin:25-jdk
+ARG JAVA_VERSION=25
+ARG CHISEL_VERSION=v1.4.1
 
 # ---------------------------------------------------------------------------
 # Stage 1: cut the Ubuntu package slices into a minimal rootfs using chisel.
@@ -19,16 +14,12 @@ ARG JDK_IMAGE=eclipse-temurin:25-jdk
 # ---------------------------------------------------------------------------
 FROM ubuntu:${UBUNTU_VERSION} AS chisel
 
-# Architecture of the build target (provided automatically by buildkit:
-# amd64, arm64, ...). Used to download the matching chisel binary.
+# TARGETARCH is auto-provided by buildx (amd64/arm64) to pick the chisel binary.
+# UBUNTU_VERSION and CHISEL_VERSION are imported from the globals above — a
+# pre-FROM ARG isn't visible inside a stage unless re-declared here.
 ARG TARGETARCH
-
-# Re-declare in this stage's scope; derive the chisel-releases branch from it.
 ARG UBUNTU_VERSION
-ARG UBUNTU_RELEASE=ubuntu-${UBUNTU_VERSION}
-
-# Pin the chisel version for reproducibility.
-ARG CHISEL_VERSION=v1.4.1
+ARG CHISEL_VERSION
 
 # ca-certificates is required so chisel can verify TLS when fetching slice
 # definitions from the chisel-releases repo; the base ubuntu image omits it.
@@ -41,7 +32,7 @@ RUN tar -xf /tmp/chisel.tar.gz -C /usr/bin/
 
 # Cut only the requested slices into /rootfs.
 RUN mkdir -p /rootfs && \
-    chisel cut --release "${UBUNTU_RELEASE}" --root /rootfs \
+    chisel cut --release "ubuntu-${UBUNTU_VERSION}" --root /rootfs \
         base-files_base \
         base-files_release-info \
         libc6_libs
@@ -56,9 +47,8 @@ COPY --from=chisel /rootfs /
 # jre-dist: take the official Temurin JRE and drop the standalone launchers a
 # running app never invokes, leaving only bin/java. Done here (the JRE image
 # has a shell) since the final image is scratch-based and shell-less.
-# JRE_IMAGE is declared globally at the top of this file.
 # ---------------------------------------------------------------------------
-FROM ${JRE_IMAGE} AS jre-dist
+FROM eclipse-temurin:${JAVA_VERSION}-jre AS jre-dist
 RUN cd /opt/java/openjdk/bin && \
     rm -f jfr jrunscript jwebserver keytool rmiregistry
 
@@ -83,7 +73,7 @@ CMD ["-version"]
 # independent, so we build it ONCE on the native arch and the per-arch app
 # images below each COPY --from this single build.
 # ---------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM ${JDK_IMAGE} AS build
+FROM --platform=$BUILDPLATFORM eclipse-temurin:${JAVA_VERSION}-jdk AS build
 WORKDIR /build
 COPY . .
 # Cache ~/.m2 across builds so dependencies aren't re-downloaded every time.
