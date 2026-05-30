@@ -11,27 +11,20 @@
 # Each is built multi-arch (linux/amd64 + linux/arm64) so it runs on both
 # Apple Silicon Macs and amd64 Linux, and tagged ${REPO}:<target>.
 #
-# Two workflows:
+# Builds both arches and loads each manifest into the local Docker store so you
+# can run them immediately. Loading a multi-arch manifest requires the containerd
+# image store (Docker Desktop: Settings > General > "Use containerd for pulling
+# and storing images"); the legacy image store can't hold one.
 #
-#   1. Local (default) — builds both arches and loads each manifest into the
-#      local Docker so you can run them immediately. Requires the containerd
-#      image store (Docker Desktop: Settings > General > "Use containerd for
-#      pulling and storing images"); the legacy image store can't hold a
-#      multi-arch manifest.
+#   ./build-image.sh           # build minimal-java:{ubuntu,jre,app,aot}
+#   ./build-image.sh myrepo    # tag the series myrepo:<target> instead
 #
-#        ./build-image.sh
-#
-#   2. Push — builds both arches and pushes each manifest to a registry, the
-#      portable way to distribute a multi-arch image.
-#
-#        PUSH=true ./build-image.sh ghcr.io/you/minimal-java
+# To publish the built series to a registry, build first, then ./push-image.sh.
 #
 # Usage:
 #   ./build-image.sh [REPO]
 #
 # Environment overrides:
-#   PUSH             "true" -> push the manifests to a registry
-#                    (default: false -> load into the local Docker)
 #   PLATFORMS        comma-separated platforms
 #                    (default: linux/amd64,linux/arm64)
 #
@@ -45,7 +38,6 @@ cd "$(dirname "$0")"
 
 REPO="${1:-minimal-java}"
 PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
-PUSH="${PUSH:-false}"
 BUILDER="chisel-builder"
 
 # Dockerfile targets to build, in series order (smallest first).
@@ -66,12 +58,7 @@ common_args=(
 
 echo "Building ${REPO} series: ${TARGETS[*]}"
 echo "  platforms: ${PLATFORMS}"
-
-if [[ "${PUSH}" == "true" ]]; then
-  echo "  output:    push to registry"
-else
-  echo "  output:    load into local Docker"
-fi
+echo "  output:    load into local Docker"
 
 for target in "${TARGETS[@]}"; do
   tag="${REPO}:${target}"
@@ -79,17 +66,11 @@ for target in "${TARGETS[@]}"; do
   echo ">>> ${tag} (--target ${target})"
   # The jre target's jlink stage runs emulated for the non-native arch, so its
   # first build is noticeably slower than base.
-  if [[ "${PUSH}" == "true" ]]; then
-    docker buildx build "${common_args[@]}" --target "${target}" --tag "${tag}" --push .
-  else
-    docker buildx build "${common_args[@]}" --target "${target}" --tag "${tag}" --load .
-  fi
+  docker buildx build "${common_args[@]}" --target "${target}" --tag "${tag}" --load .
 done
 
-# Size comparison: full Ubuntu base vs each chiseled image, side by side. Skip
-# on push (the images aren't in the local store to inspect). Delegated to
-# image-stats.sh, which is also runnable on its own to re-check sizes later.
-if [[ "${PUSH}" != "true" ]]; then
-  echo
-  PLATFORMS="${PLATFORMS}" ./image-stats.sh "${REPO}"
-fi
+# Size comparison: full Ubuntu base vs each chiseled image, side by side.
+# Delegated to image-stats.sh, which is also runnable on its own to re-check
+# sizes later.
+echo
+PLATFORMS="${PLATFORMS}" ./image-stats.sh "${REPO}"
