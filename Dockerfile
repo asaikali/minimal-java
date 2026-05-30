@@ -4,6 +4,10 @@
 # chisel-releases slice branch. Declared before FROM so it can drive the tag.
 ARG UBUNTU_VERSION=26.04
 
+# Temurin JRE image we copy the runtime from. Declared before any FROM (global
+# scope) so it can be referenced in the jre-dist stage's FROM line.
+ARG JRE_IMAGE=eclipse-temurin:25-jre
+
 # ---------------------------------------------------------------------------
 # Stage 1: cut the Ubuntu package slices into a minimal rootfs using chisel.
 # ---------------------------------------------------------------------------
@@ -37,7 +41,30 @@ RUN mkdir -p /rootfs && \
         libc6_libs
 
 # ---------------------------------------------------------------------------
-# Stage 2: assemble the final image from the chiseled rootfs only.
+# Image: ubuntu — chiseled Ubuntu (base-files + libc6) only.
 # ---------------------------------------------------------------------------
-FROM scratch
+FROM scratch AS ubuntu
 COPY --from=chisel /rootfs /
+
+# ---------------------------------------------------------------------------
+# jre-dist: take the official Temurin JRE and drop the standalone launchers a
+# running app never invokes, leaving only bin/java. Done here (the JRE image
+# has a shell) since the final image is scratch-based and shell-less.
+# JRE_IMAGE is declared globally at the top of this file.
+# ---------------------------------------------------------------------------
+FROM ${JRE_IMAGE} AS jre-dist
+RUN cd /opt/java/openjdk/bin && \
+    rm -f jfr jrunscript jwebserver keytool rmiregistry
+
+# ---------------------------------------------------------------------------
+# Image: jre — chiseled ubuntu + the trimmed Temurin JRE; libc6 (in the ubuntu
+# stage) is the only runtime dependency, so no extra chisel slices are needed.
+# "FROM ubuntu" below refers to the chiseled stage above, NOT
+# docker.io/library/ubuntu (that would need a tag, e.g. ubuntu:26.04).
+# ---------------------------------------------------------------------------
+FROM ubuntu AS jre
+COPY --from=jre-dist /opt/java/openjdk /opt/java/openjdk
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH=/opt/java/openjdk/bin:$PATH
+ENTRYPOINT ["/opt/java/openjdk/bin/java"]
+CMD ["-version"]
