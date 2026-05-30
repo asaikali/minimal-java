@@ -34,19 +34,25 @@
 #                    (default: false -> load into the local Docker)
 #   PLATFORMS        comma-separated platforms
 #                    (default: linux/amd64,linux/arm64)
-#   CHISEL_VERSION   chisel release to download         (default: v1.4.1)
-#   UBUNTU_VERSION   Ubuntu version (base + slices)     (default: 26.04)
+#
+# Image versions (Ubuntu, JRE, chisel) are NOT set here — they live in the
+# Dockerfile's ARG lines, the single source of truth. To change one, edit the
+# Dockerfile (which is also what Renovate updates).
 #
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
 REPO="${1:-minimal-java}"
-CHISEL_VERSION="${CHISEL_VERSION:-v1.4.1}"
-UBUNTU_VERSION="${UBUNTU_VERSION:-26.04}"
 PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 PUSH="${PUSH:-false}"
 BUILDER="chisel-builder"
+
+# buildx reads the image versions straight from the Dockerfile's ARG defaults, so
+# the build needs nothing from here. We read just the Ubuntu version back — and only
+# for the size-comparison step below, which pulls the full ubuntu:${UBUNTU_VERSION}
+# base for reference (a plain docker pull, outside the build, so it can't see ARGs).
+UBUNTU_VERSION="$(sed -n 's/^ARG UBUNTU_VERSION=//p' Dockerfile)"
 
 # Dockerfile targets to build, in series order (smallest first).
 TARGETS=(ubuntu jre app aot)
@@ -61,13 +67,10 @@ fi
 # Shared buildx args; per-target --target/--tag are appended in the loop below.
 common_args=(
   --builder "${BUILDER}"
-  --build-arg "CHISEL_VERSION=${CHISEL_VERSION}"
-  --build-arg "UBUNTU_VERSION=${UBUNTU_VERSION}"
   --platform "${PLATFORMS}"
 )
 
 echo "Building ${REPO} series: ${TARGETS[*]}"
-echo "  chisel:    ${CHISEL_VERSION}"
 echo "  ubuntu:    ${UBUNTU_VERSION}"
 echo "  platforms: ${PLATFORMS}"
 
