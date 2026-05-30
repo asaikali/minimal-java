@@ -14,9 +14,8 @@ ARG JDK_IMAGE=eclipse-temurin:25-jdk
 
 # ---------------------------------------------------------------------------
 # Stage 1: cut the Ubuntu package slices into a minimal rootfs using chisel.
-# Background talk (Canonical's chisel, bottom-up minimal Ubuntu containers):
-# "Chisel: a bottom up build strategy for minimal and secure Ubuntu containers"
-# OCX 2024 — https://www.youtube.com/watch?v=Vr6AIGJw3xg  (see README Resources).
+# New to chisel? 7-min lightboard intro: https://www.youtube.com/watch?v=o8NILnbjhQ4
+# Two deeper talks + a suggested watch order are in the README Resources section.
 # ---------------------------------------------------------------------------
 FROM ubuntu:${UBUNTU_VERSION} AS chisel
 

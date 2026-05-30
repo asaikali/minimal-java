@@ -7,11 +7,24 @@ Background material on the topics this repo explores.
 
 ### Chisel & minimal Ubuntu containers (the `ubuntu` image)
 
-- **[Chisel: a bottom up build strategy for minimal and secure Ubuntu containers](https://www.youtube.com/watch?v=Vr6AIGJw3xg)**
-  — Canonical talk at **OCX 2024** (Eclipse Foundation).
+Three talks explain the tooling behind our chiseled `ubuntu` base image — how to
+build distroless-style Ubuntu images that keep only the files you need. If you're
+new to chisel, watch them **shortest → longest**; each adds more depth:
 
-  Explains the tooling behind our chiseled `ubuntu` base image — how to build
-  distroless-style Ubuntu images that keep only the files you need. Summary:
+1. **[Chiselled Ubuntu Containers](https://www.youtube.com/watch?v=o8NILnbjhQ4)**
+   — Mark Lewis, Canonical · lightboard explainer · ~7 min. The quickest "what &
+   why": the extensibility-vs-security trade-off, what gets dropped for production
+   (no shell, no package manager, no privileged user), and how slices solve it.
+   Best starting point.
+2. **[Re-inventing distroless with Chiselled Ubuntu containers](https://www.youtube.com/watch?v=yQukQb-n99E)**
+   — Canonical, Ubuntu Summit 2024 · ~20 min · clearest audio. Good second watch:
+   the distroless "false negatives" problem in CVE scanners, slice definition files
+   and `chisel cut`, with live demos. Start here if you want just one talk.
+3. **[Chisel: a bottom up build strategy for minimal and secure Ubuntu containers](https://www.youtube.com/watch?v=Vr6AIGJw3xg)**
+   — Canonical, OCX 2024 (Eclipse Foundation) · ~26 min. A useful deeper complement
+   covering the full Rockcraft + Chisel + Pebble toolchain and size/CVE comparisons.
+
+Combined summary of the key ideas:
 
   - **The problem:** a normal `FROM ubuntu` + `apt install` image drags in distro
     residue you never use at runtime (shells, `awk`/`grep`/`ls`, the package manager
@@ -33,9 +46,21 @@ Background material on the topics this repo explores.
     (editable config), and `copyright` (auto-included for license compliance) — which
     is exactly why this repo cuts `base-files_base`, `base-files_release-info`, and
     `libc6_libs`.
+  - **Hand-rolled distroless can hide CVEs:** scanners identify vulnerabilities from
+    package metadata left in the image. Cherry-picking files onto `scratch` can drop
+    that metadata, so scanners report *false negatives* — removing a single file made
+    multiple scanners report zero CVEs. Chisel keeps the real package provenance, so
+    scanning stays honest.
+  - **Production-grade defaults:** the talks argue a production container shouldn't have
+    a shell, a package manager, or privileged users, and should be immutable — close to
+    what our `ubuntu`/`jre` images already are. Chisel can also emit a **manifest**
+    (`manifest.wall`, JSON-lines) listing every file/package/version for SBOMs.
+  - **Maintainability pull-through:** slices ride Ubuntu's normal package build/CI, so
+    security patches (LTS/ESM) flow into chiseled images like any other Ubuntu update —
+    you don't lose the distro's maintenance by going minimal.
   - **Results:** for Python 3.11, full Ubuntu-based ~43 MB → distroless (`bare`/scratch
-    base) ~29 MB → **chiseled ~14–16 MB**, with far fewer CVEs and FIPS/STIG-friendly
-    output.
+    base) ~29 MB → **chiseled ~14–16 MB**, with a ~60% CVE reduction, ~20–25% faster
+    pull/spin-up, and FIPS/STIG-friendly output.
   - **Two ways to use it:** with a plain multi-stage Dockerfile (`chisel cut` into a
     rootfs, then `COPY` it onto `scratch` — exactly what this repo's `ubuntu` stage
     does), or declaratively via Canonical's **Rockcraft** (+ **Pebble** as the init /
