@@ -73,7 +73,20 @@ else
   docker buildx build "${build_args[@]}" --load .
   echo
   echo "Built ${IMAGE_TAG}"
+
+  # Pull the full Ubuntu base image for the same platforms so we can show a
+  # like-for-like (uncompressed disk usage) size comparison against the
+  # chiseled result.
   echo
+  echo "Base image (for comparison):"
+  IFS=',' read -ra _platforms <<< "${PLATFORMS}"
+  for _p in "${_platforms[@]}"; do
+    docker pull --quiet --platform "${_p}" "ubuntu:${UBUNTU_VERSION}" >/dev/null
+  done
   # --tree prints per-architecture sizes in MB (no manual formatting needed).
+  docker image ls --tree "ubuntu:${UBUNTU_VERSION}"
+
+  echo
+  echo "Chiseled image:"
   docker image ls --tree "${IMAGE_TAG}"
 fi
