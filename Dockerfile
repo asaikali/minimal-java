@@ -115,6 +115,10 @@ ENTRYPOINT ["/opt/java/openjdk/bin/java", "-jar", "application.jar"]
 # (-Dspring.context.exit=onRefresh), recording loaded classes into app.aot
 # (JEP 514 one-step -XX:AOTCacheOutput). The runtime then loads that cache via
 # -XX:AOTCache. RUN uses exec form because the chiseled image has no shell.
+#
+# Background talk (explains AOT / Project Leyden by a member of the Spring Boot
+# team): "Supercharge your JVM performance with Project Leyden and Spring Boot"
+# by Moritz Halbritter, 2026-02-10 — https://www.youtube.com/watch?v=UqaSWiE076w
 # ---------------------------------------------------------------------------
 FROM app AS aot
 RUN ["/opt/java/openjdk/bin/java", "-XX:AOTCacheOutput=app.aot", "-Dspring.context.exit=onRefresh", "-jar", "application.jar"]
