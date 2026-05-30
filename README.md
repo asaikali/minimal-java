@@ -5,6 +5,42 @@ Experiments in building minimal, secure, and reproducible Java container runtime
 
 Background material on the topics this repo explores.
 
+### Chisel & minimal Ubuntu containers (the `ubuntu` image)
+
+- **[Chisel: a bottom up build strategy for minimal and secure Ubuntu containers](https://www.youtube.com/watch?v=Vr6AIGJw3xg)**
+  — Canonical talk at **OCX 2024** (Eclipse Foundation).
+
+  Explains the tooling behind our chiseled `ubuntu` base image — how to build
+  distroless-style Ubuntu images that keep only the files you need. Summary:
+
+  - **The problem:** a normal `FROM ubuntu` + `apt install` image drags in distro
+    residue you never use at runtime (shells, `awk`/`grep`/`ls`, the package manager
+    and its caches) — e.g. ~43 MB for a Python image. Top Docker Hub images routinely
+    ship CVEs that take ~3 weeks to patch, and hand-rolling a *minimal* image is hard
+    to get right and maintain.
+  - **Top-down distroless is hard:** the multi-stage "copy only what you need onto
+    `scratch`" approach forces you to figure out every required file and dependency
+    (e.g. CPython's `libc` and friends) by hand. Google's Bazel-based distroless images
+    are tiny (~20 MB) but the recipes are long and pull in Bazel.
+  - **Chisel is bottom-up instead:** rather than inflate a base and trim it, you start
+    from `scratch` and assemble a filesystem from **slices** of Ubuntu packages. The
+    bits are the *real* Ubuntu bits, so anything that runs on Ubuntu runs on the
+    chiseled image — but only the files you asked for are present, shrinking both size
+    and attack surface.
+  - **Slices & slice definition files:** chisel resolves slice dependencies
+    automatically/recursively from slice-definition files. Standard slice names are
+    `bins` (executables), `libs` (shared libraries), `data` (static data), `config`
+    (editable config), and `copyright` (auto-included for license compliance) — which
+    is exactly why this repo cuts `base-files_base`, `base-files_release-info`, and
+    `libc6_libs`.
+  - **Results:** for Python 3.11, full Ubuntu-based ~43 MB → distroless (`bare`/scratch
+    base) ~29 MB → **chiseled ~14–16 MB**, with far fewer CVEs and FIPS/STIG-friendly
+    output.
+  - **Two ways to use it:** with a plain multi-stage Dockerfile (`chisel cut` into a
+    rootfs, then `COPY` it onto `scratch` — exactly what this repo's `ubuntu` stage
+    does), or declaratively via Canonical's **Rockcraft** (+ **Pebble** as the init /
+    entrypoint), which produces images called "rocks".
+
 ### Project Leyden & AOT (the `aot` image)
 
 - **[Supercharge your JVM performance with Project Leyden and Spring Boot](https://www.youtube.com/watch?v=UqaSWiE076w)**
