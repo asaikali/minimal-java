@@ -6,7 +6,7 @@
 #   ubuntu — chiseled Ubuntu (base-files + libc6) only
 #   jre    — chiseled ubuntu + a trimmed Eclipse Temurin JRE 25
 #   app    — jre + the Spring Boot app, exploded into Spring Boot layers
-#   aot    — app + a JDK 25 AOT cache (training run) for faster startup
+#   aot    — jre + the app layout + a JDK 25 AOT cache, for faster startup
 #
 # Each is built multi-arch (linux/amd64 + linux/arm64) so it runs on both
 # Apple Silicon Macs and amd64 Linux, and tagged minimal-java:<target>.
