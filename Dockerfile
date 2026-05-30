@@ -8,7 +8,7 @@ ARG JAVA_VERSION=25
 ARG CHISEL_VERSION=v1.4.1
 
 # ---------------------------------------------------------------------------
-# Stage 1: cut the Ubuntu package slices into a minimal rootfs using chisel.
+# chisel: cut the Ubuntu package slices into a minimal rootfs.
 # New to chisel? 7-min lightboard intro: https://www.youtube.com/watch?v=o8NILnbjhQ4
 # Two deeper talks + a suggested watch order are in the README Resources section.
 # ---------------------------------------------------------------------------
@@ -105,7 +105,7 @@ USER 10001:10001
 ENTRYPOINT ["java", "-jar", "application.jar"]
 
 # ---------------------------------------------------------------------------
-# Image: aot — a sibling of app on jre: the same exploded app PLUS a JDK 25 AOT
+# Image: aot — a sibling of app on jre: the same exploded app PLUS a JDK AOT
 # cache, trading a larger image for faster startup. A build-time "training run"
 # starts the app, lets Spring refresh the context, then exits
 # (-Dspring.context.exit=onRefresh), recording loaded classes into app.aot
