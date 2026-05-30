@@ -72,7 +72,7 @@ FROM ubuntu AS jre
 COPY --from=jre-dist /opt/java/openjdk /opt/java/openjdk
 ENV JAVA_HOME=/opt/java/openjdk
 ENV PATH=/opt/java/openjdk/bin:$PATH
-ENTRYPOINT ["/opt/java/openjdk/bin/java"]
+ENTRYPOINT ["java"]
 CMD ["-version"]
 
 # ---------------------------------------------------------------------------
@@ -112,7 +112,7 @@ EXPOSE 8080
 # Numeric non-root UID:GID — no /etc/passwd needed, and Kubernetes runAsNonRoot
 # can verify it. Defining ENTRYPOINT also resets jre's inherited "-version" CMD.
 USER 10001:10001
-ENTRYPOINT ["/opt/java/openjdk/bin/java", "-jar", "application.jar"]
+ENTRYPOINT ["java", "-jar", "application.jar"]
 
 # ---------------------------------------------------------------------------
 # Image: aot — a sibling of app on jre: the same exploded app PLUS a JDK 25 AOT
@@ -135,6 +135,6 @@ COPY --from=build /build/extracted/spring-boot-loader/ ./
 COPY --from=build /build/extracted/snapshot-dependencies/ ./
 COPY --from=build /build/extracted/application/ ./
 EXPOSE 8080
-RUN ["/opt/java/openjdk/bin/java", "-XX:AOTCacheOutput=app.aot", "-Dspring.context.exit=onRefresh", "-jar", "application.jar"]
+RUN ["java", "-XX:AOTCacheOutput=app.aot", "-Dspring.context.exit=onRefresh", "-jar", "application.jar"]
 USER 10001:10001
-ENTRYPOINT ["/opt/java/openjdk/bin/java", "-XX:AOTCache=app.aot", "-jar", "application.jar"]
+ENTRYPOINT ["java", "-XX:AOTCache=app.aot", "-jar", "application.jar"]
