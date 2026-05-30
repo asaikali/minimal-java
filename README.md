@@ -22,9 +22,9 @@ layer costs and what it contributes.
 
 ## The image series
 
-Each image is a named `--target` in one multi-stage `Dockerfile`, built multi-arch
-(amd64 + arm64) by `./build-image.sh` (which also prints this size comparison). Each
-adds one technique on top of the previous:
+`./build-image.sh` produces four images — `ubuntu`, `jre`, `app`, and `aot` — each
+adding one technique on top of the previous (full `ubuntu:26.04` is shown only for
+comparison):
 
 | Image                 | Builds on | Adds (the technique)                                                       | Size (amd64) | Startup |
 | --------------------- | --------- | -------------------------------------------------------------------------- | ------------ | ------- |
@@ -33,6 +33,10 @@ adds one technique on top of the previous:
 | `minimal-java:jre`    | `:ubuntu` | **trimmed Temurin JRE 25** — standalone launchers removed                  | ~65 MB       | —       |
 | `minimal-java:app`    | `:jre`    | Spring Boot **layered jar**, exploded into cache-friendly layers           | ~119 MB      | ~1.8 s  |
 | `minimal-java:aot`    | `:app`    | **JDK 25 AOT cache** (Project Leyden), trained at build time               | ~146 MB      | ~0.5 s  |
+
+Under the hood, each image is a named stage in a single multi-stage `Dockerfile`;
+the script builds each one with `docker build --target <name>`, multi-arch for
+`linux/amd64` + `linux/arm64`, and prints the size comparison above.
 
 See **[Resources](#resources)** below for talks that go deep on chisel and AOT.
 
