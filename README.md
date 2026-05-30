@@ -8,9 +8,8 @@ web app's container can get — built up **one technique at a time**.
 The application is a typical Spring Boot 4 service: Java 25, Spring MVC exposing a
 REST API, backed by Spring Data JPA / Hibernate over an H2 database with Flyway
 migrations (it returns a random quote). It's intentionally small so the focus stays
-on the **`Dockerfile`**, which defines a *series* of progressively richer images —
-each adding a single idea on top of the previous one — so you can see what each
-layer costs and what it contributes.
+on the **`Dockerfile`**, which defines a *series* of images, each adding one
+focused technique, so you can see what each step costs and what it contributes.
 
 ## Highlights
 
@@ -22,9 +21,18 @@ layer costs and what it contributes.
 
 ## The image series
 
-`./build-image.sh` produces four images — `ubuntu`, `jre`, `app`, and `aot` — each
-adding one technique on top of the previous (full `ubuntu:26.04` is shown only for
-comparison):
+`./build-image.sh` produces four images. `ubuntu` and `jre` build up the runtime
+in a line; then `app` and `aot` are two **sibling** packagings of the same Spring
+Boot app on top of `jre` — `app` favors a smaller image, `aot` trades a larger
+image for faster startup (full `ubuntu:26.04` is shown only for comparison):
+
+```
+scratch
+└─ ubuntu    chiseled Ubuntu (base-files + libc6)
+   └─ jre     trimmed Temurin JRE 25
+      ├─ app   exploded Spring Boot app           — smaller image
+      └─ aot   app layout + JDK 25 AOT cache      — faster startup, larger image
+```
 
 | Image                 | Builds on | Adds (the technique)                                                       | Size (amd64) | Startup |
 | --------------------- | --------- | -------------------------------------------------------------------------- | ------------ | ------- |
@@ -32,7 +40,7 @@ comparison):
 | `minimal-java:ubuntu` | `scratch` | Canonical **chisel** — built bottom-up from package *slices* (no shell/apt) | ~2.5 MB     | —       |
 | `minimal-java:jre`    | `:ubuntu` | **trimmed Temurin JRE 25** — standalone launchers removed                  | ~65 MB       | —       |
 | `minimal-java:app`    | `:jre`    | Spring Boot **layered jar**, exploded into cache-friendly layers           | ~119 MB      | ~1.8 s  |
-| `minimal-java:aot`    | `:app`    | **JDK 25 AOT cache** (Project Leyden), trained at build time               | ~146 MB      | ~0.5 s  |
+| `minimal-java:aot`    | `:jre`    | the app layout **plus** a **JDK 25 AOT cache** (Project Leyden)            | ~146 MB      | ~0.5 s  |
 
 Under the hood, each image is a named stage in a single multi-stage `Dockerfile`;
 the script builds each one with `docker build --target <name>`, multi-arch for

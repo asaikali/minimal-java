@@ -99,6 +99,8 @@ RUN --mount=type=cache,target=/root/.m2 \
 # Image: app — jre + the exploded app, one COPY per layer. Ordered slowest-
 # changing first (dependencies) to fastest (application) so a code change only
 # busts the small final layer and reuses the cached dependency layers.
+# app and aot are siblings on jre: two packagings of the same app (see aot for
+# the faster-startup variant).
 # ---------------------------------------------------------------------------
 FROM jre AS app
 WORKDIR /app
@@ -107,21 +109,32 @@ COPY --from=build /build/extracted/spring-boot-loader/ ./
 COPY --from=build /build/extracted/snapshot-dependencies/ ./
 COPY --from=build /build/extracted/application/ ./
 EXPOSE 8080
-# Defining ENTRYPOINT here resets the "-version" CMD inherited from jre, so no
-# explicit CMD reset is needed.
+# Numeric non-root UID:GID — no /etc/passwd needed, and Kubernetes runAsNonRoot
+# can verify it. Defining ENTRYPOINT also resets jre's inherited "-version" CMD.
+USER 10001:10001
 ENTRYPOINT ["/opt/java/openjdk/bin/java", "-jar", "application.jar"]
 
 # ---------------------------------------------------------------------------
-# Image: aot — app + a JDK 25 AOT cache for faster startup. A build-time
-# "training run" starts the app, lets Spring refresh the context, then exits
+# Image: aot — a sibling of app on jre: the same exploded app PLUS a JDK 25 AOT
+# cache, trading a larger image for faster startup. A build-time "training run"
+# starts the app, lets Spring refresh the context, then exits
 # (-Dspring.context.exit=onRefresh), recording loaded classes into app.aot
-# (JEP 514 one-step -XX:AOTCacheOutput). The runtime then loads that cache via
-# -XX:AOTCache. RUN uses exec form because the chiseled image has no shell.
+# (JEP 514 one-step -XX:AOTCacheOutput); the runtime loads it via -XX:AOTCache.
+# The training RUN runs as the default root user so it can write app.aot into
+# /app; USER then drops to non-root for runtime. RUN uses exec form (the chiseled
+# image has no shell).
 #
 # Background talk (explains AOT / Project Leyden by a member of the Spring Boot
 # team): "Supercharge your JVM performance with Project Leyden and Spring Boot"
 # by Moritz Halbritter, 2026-02-10 — https://www.youtube.com/watch?v=UqaSWiE076w
 # ---------------------------------------------------------------------------
-FROM app AS aot
+FROM jre AS aot
+WORKDIR /app
+COPY --from=build /build/extracted/dependencies/ ./
+COPY --from=build /build/extracted/spring-boot-loader/ ./
+COPY --from=build /build/extracted/snapshot-dependencies/ ./
+COPY --from=build /build/extracted/application/ ./
+EXPOSE 8080
 RUN ["/opt/java/openjdk/bin/java", "-XX:AOTCacheOutput=app.aot", "-Dspring.context.exit=onRefresh", "-jar", "application.jar"]
+USER 10001:10001
 ENTRYPOINT ["/opt/java/openjdk/bin/java", "-XX:AOTCache=app.aot", "-jar", "application.jar"]
