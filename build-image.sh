@@ -2,18 +2,21 @@
 #
 # Build the chiseled-Ubuntu container image defined in ./Dockerfile.
 #
+# Builds a multi-arch (linux/amd64 + linux/arm64) image so it runs on both
+# Apple Silicon Macs and amd64 Linux.
+#
 # Two workflows:
 #
-#   1. Local (default) — builds for your host architecture and loads the image
-#      into the local Docker so you can run it immediately (e.g. on an Apple
-#      Silicon Mac it builds linux/arm64; on an amd64 Linux box, linux/amd64).
+#   1. Local (default) — builds both arches and loads the manifest into the
+#      local Docker so you can run it immediately. Requires the containerd
+#      image store (Docker Desktop: Settings > General > "Use containerd for
+#      pulling and storing images"); the legacy image store can't hold a
+#      multi-arch manifest.
 #
 #        ./build-image.sh
 #
-#   2. Multi-arch — builds linux/amd64 + linux/arm64 as a single manifest and
-#      pushes it to a registry. Docker cannot load a multi-arch manifest into
-#      the local image store, so this path requires pushing. The pushed image
-#      then runs on both Mac (arm64) and Linux (amd64).
+#   2. Push — builds both arches and pushes the manifest to a registry, the
+#      portable way to distribute a multi-arch image.
 #
 #        PUSH=true ./build-image.sh ghcr.io/you/minimal-java:chiseled
 #
@@ -21,10 +24,10 @@
 #   ./build-image.sh [IMAGE_TAG]
 #
 # Environment overrides:
-#   PUSH             "true" -> multi-arch build pushed to a registry
-#                    (default: false -> single-arch build loaded locally)
+#   PUSH             "true" -> push the manifest to a registry
+#                    (default: false -> load into the local Docker)
 #   PLATFORMS        comma-separated platforms
-#                    (default: host arch when loading; amd64,arm64 when pushing)
+#                    (default: linux/amd64,linux/arm64)
 #   CHISEL_VERSION   chisel release to download         (default: v1.4.1)
 #   UBUNTU_VERSION   Ubuntu version (base + slices)     (default: 26.04)
 #
@@ -35,6 +38,7 @@ cd "$(dirname "$0")"
 IMAGE_TAG="${1:-minimal-java:chiseled}"
 CHISEL_VERSION="${CHISEL_VERSION:-v1.4.1}"
 UBUNTU_VERSION="${UBUNTU_VERSION:-26.04}"
+PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 PUSH="${PUSH:-false}"
 BUILDER="chisel-builder"
 
@@ -53,25 +57,23 @@ build_args=(
 )
 
 echo "Building ${IMAGE_TAG}"
-echo "  chisel: ${CHISEL_VERSION}"
-echo "  ubuntu: ${UBUNTU_VERSION}"
+echo "  chisel:    ${CHISEL_VERSION}"
+echo "  ubuntu:    ${UBUNTU_VERSION}"
+echo "  platforms: ${PLATFORMS}"
+
+build_args+=(--platform "${PLATFORMS}")
 
 if [[ "${PUSH}" == "true" ]]; then
-  PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
-  echo "  platforms: ${PLATFORMS} (multi-arch, pushing to registry)"
-  docker buildx build "${build_args[@]}" --platform "${PLATFORMS}" --push .
+  echo "  output:    push to registry"
+  docker buildx build "${build_args[@]}" --push .
   echo
   echo "Pushed ${IMAGE_TAG}"
 else
-  # Single-arch so the result can be loaded into the local Docker and run.
-  if [[ -n "${PLATFORMS:-}" ]]; then
-    build_args+=(--platform "${PLATFORMS}")
-    echo "  platform: ${PLATFORMS} (loaded locally)"
-  else
-    echo "  platform: host (loaded locally)"
-  fi
+  echo "  output:    load into local Docker"
   docker buildx build "${build_args[@]}" --load .
   echo
   echo "Built ${IMAGE_TAG}"
-  docker image inspect "${IMAGE_TAG}" --format 'Size: {{.Size}} bytes'
+  echo
+  # --tree prints per-architecture sizes in MB (no manual formatting needed).
+  docker image ls --tree "${IMAGE_TAG}"
 fi
