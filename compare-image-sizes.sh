@@ -1,43 +1,46 @@
 #!/usr/bin/env bash
 #
-# Size comparison for the chiseled-image series built by ./build-image.sh:
-# the full Ubuntu base vs each chiseled image, side by side, per architecture.
+# Size comparison for the images built by ./build-image.sh: the full Ubuntu base
+# and the naive fat-jar image vs the chiseled series, as a tidy per-architecture
+# table. The security/startup analogues are compare-cve-counts.sh and
+# compare-startup-times.sh.
 #
-# build-image.sh calls this at the end of a build, but it's also runnable on its
-# own against images already in the local Docker store — handy for re-checking
-# sizes without rebuilding:
+# Sizes come from `docker image inspect --platform ... --format '{{.Size}}'` (the
+# image's content size, in bytes) — a stable machine interface, so there's no
+# parsing of formatted output to break when Docker changes its display.
 #
+# Run after building (the minimal-java:* images must be local):
+#
+#   ./build-image.sh
 #   ./compare-image-sizes.sh
-#
-# Reads the Ubuntu version from the Dockerfile's ARG line (the single source of
-# truth) so the base it pulls matches the one the series was chiselled from.
 #
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# The full Ubuntu base to compare against. Read from the Dockerfile ARG (a plain
-# docker pull below, outside any build, so it can't see the ARG itself).
 UBUNTU_VERSION="$(sed -n 's/^ARG UBUNTU_VERSION=//p' Dockerfile)"
 
-# Pull the full Ubuntu base for both arches so we can show a like-for-like
-# (uncompressed disk usage) comparison against the chiseled results.
+# inspect reads only local images, so pull the full Ubuntu base (both arches)
+# first; the minimal-java:* images are already local from the build.
 docker pull --quiet --platform linux/amd64 "ubuntu:${UBUNTU_VERSION}" >/dev/null
 docker pull --quiet --platform linux/arm64 "ubuntu:${UBUNTU_VERSION}" >/dev/null
 
-# Full ubuntu baseline and the naive fat-jar image first, then the chiseled
-# series smallest -> largest.
-# --tree prints per-architecture sizes in MB (no manual formatting needed).
-echo "Size comparison (ubuntu base + naive fat jar -> chiseled series):"
+# Print one table row: image label + content size (decimal MB) per arch. A
+# missing image inspects as 0 rather than aborting the run.
+size() {  # $1 = image ref, $2 = label
+  local amd64 arm64
+  amd64="$(docker image inspect --platform linux/amd64 "$1" --format '{{.Size}}' 2>/dev/null || echo 0)"
+  arm64="$(docker image inspect --platform linux/arm64 "$1" --format '{{.Size}}' 2>/dev/null || echo 0)"
+  awk -v l="$2" -v a="$amd64" -v b="$arm64" \
+    'BEGIN { printf "  %-26s %8.1f MB %8.1f MB\n", l, a/1e6, b/1e6 }'
+}
+
+echo "Size comparison (image size, decimal MB):"
 echo
-docker image ls --tree "ubuntu:${UBUNTU_VERSION}"
-echo
-docker image ls --tree "minimal-java:fat"
-echo
-docker image ls --tree "minimal-java:ubuntu"
-echo
-docker image ls --tree "minimal-java:jre"
-echo
-docker image ls --tree "minimal-java:app"
-echo
-docker image ls --tree "minimal-java:aot"
+printf '  %-26s %11s %11s\n' "image" "amd64" "arm64"
+size "ubuntu:${UBUNTU_VERSION}" "ubuntu:${UBUNTU_VERSION} (full)"
+size "minimal-java:fat"         "minimal-java:fat (naive)"
+size "minimal-java:ubuntu"      "minimal-java:ubuntu"
+size "minimal-java:jre"         "minimal-java:jre"
+size "minimal-java:app"         "minimal-java:app"
+size "minimal-java:aot"         "minimal-java:aot"
