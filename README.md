@@ -159,12 +159,14 @@ from the repo root, so no extra tooling is required; if you use
 [mise](https://mise.jdx.dev) it adds `scripts/` to your `PATH` after `mise trust`,
 letting you drop the `./scripts/` prefix.
 
-**Before you start** you need Docker with the **containerd image store** enabled
-(Docker Desktop: *Settings → General → "Use containerd for pulling and storing
-images"*). It's what lets a multi-arch image load into your local store; the
-legacy store can't hold one. The CVE step also wants `trivy` and `jq`
-(`brew install trivy jq`), and the Kubernetes step wants `kubectl` pointed at
-Docker Desktop's cluster — both optional, only for their steps.
+**Before you start:**
+
+- **Required** — Docker with the **containerd image store** enabled (Docker Desktop:
+  *Settings → General → "Use containerd for pulling and storing images"*). It's what
+  lets a multi-arch image load into your local store; the legacy store can't hold one.
+- **Optional, only for specific steps** — `trivy` and `jq` (`brew install trivy jq`)
+  for the CVE step (Step 5), and `kubectl` pointed at Docker Desktop's cluster for the
+  Kubernetes step (Step 6). Steps 1–4 need neither.
 
 ### Step 1 — Build the image series
 
@@ -268,12 +270,12 @@ jvm-aot: ... Started Application in 0.535 seconds (process running for 0.687)
 spring-aot: ... Started Application in 0.408 seconds (process running for 0.556)
 ```
 
-Three techniques, three jumps. `fat → app` exploding the fat jar into layers drops
-the nested-jar classloader overhead. `app → jvm-aot` the JDK 25 AOT cache replays the
-class loading/linking recorded during the build-time training run — taking startup
-from **~1.6 s to ~0.5 s**. `jvm-aot → spring-aot` Spring AOT replaces reflective bean
-wiring with generated code, shaving it further to **~0.4 s — about 4.8× faster than
-the `fat` baseline**. (Spring AOT's gain stacks on top of the AOT cache; on a larger
+Three techniques, three jumps. **`fat → app`:** exploding the fat jar into layers
+drops the nested-jar classloader overhead. **`app → jvm-aot`:** the JDK 25 AOT cache
+replays the class loading/linking recorded during the build-time training run,
+taking startup from **~1.6 s to ~0.5 s**. **`jvm-aot → spring-aot`:** Spring AOT
+replaces reflective bean wiring with generated code, shaving it further to **~0.4 s
+— about 4.8× faster than the `fat` baseline**. (Spring AOT's gain stacks on top of the AOT cache; on a larger
 bean graph the gap is wider. See
 [Project Leyden & AOT](#project-leyden--aot-the-jvm-aot-and-spring-aot-images) for how both are built.)
 
@@ -295,13 +297,14 @@ Scan every image with [Trivy](https://trivy.dev) and print a per-severity recap
   minimal-java:fat              3   11   62    4
   minimal-java:app              3    3    0    1
   minimal-java:jvm-aot          3    3    0    1
+  minimal-java:spring-aot       3    3    0    1
 ```
 
 This is the security half of the story. Full `ubuntu:26.04` carries dozens of OS
 findings; the chiseled `minimal-java:ubuntu` and `jre` images report **zero** —
 the OS attack surface is gone because those packages simply aren't in the image.
 The naive `fat` baseline inherits the full JRE's OS packages on top of the app's
-jars (62 medium findings alone). The `app`/`jvm-aot` images keep the OS at zero; their
+jars (62 medium findings alone). The `app`/`jvm-aot`/`spring-aot` images keep the OS at zero; their
 remaining findings live in the **Java dependencies** (the application jars), not
 the base — exactly what you'd then triage by updating dependencies.
 
