@@ -18,6 +18,7 @@ rm_image()     { docker image rm -f "$1" >/dev/null 2>&1 && echo "removed image 
 
 # Containers the run/startup scripts may strand (they normally --rm themselves,
 # but a crashed or interrupted run can leave one behind).
+rm_container minimal-java-fat
 rm_container minimal-java-jvm-aot
 rm_container minimal-java-spring-aot
 rm_container minimal-java-app

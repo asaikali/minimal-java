@@ -46,9 +46,9 @@ fi
 # Tag to publish under each per-image repository (defaults to latest).
 TAG="${2:-latest}"
 
-# Same series as build-images.sh, smallest first. The naive fat baseline is
-# built locally for comparison but not published.
-TARGETS=(ubuntu jre app jvm-aot spring-aot)
+# Same series as build-images.sh, smallest first. fat (the naive baseline) is
+# published too — it's Part 1's end-to-end pipeline example.
+TARGETS=(ubuntu jre fat app jvm-aot spring-aot)
 
 echo "Pushing minimal-java/*:local -> ${DEST}/*:${TAG}"
 

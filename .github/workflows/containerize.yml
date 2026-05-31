@@ -8,8 +8,8 @@
 # recompiled here — the jar came from the Artifact pipeline, the base from the
 # Base Images pipeline. The registry is the hand-off point between all three.
 #
-#   fat        : full Temurin JRE + the plain jar (naive baseline; built but NOT
-#                published — it exists only for the local size/startup compare)
+#   fat        : full Temurin JRE + the plain jar (the naive baseline / Part 1 of the
+#                tutorial: the simplest end-to-end pipeline; published like the rest)
 #   app        : jre base + the exploded plain jar
 #   jvm-aot    : app + a JDK AOT cache (training run; arch-specific, emulated for arm64)
 #   spring-aot : jre base + the exploded Spring-AOT jar + a JDK AOT cache
@@ -55,7 +55,7 @@ jobs:
           - name: fat
             jar: latest
             base: false
-            publish: false
+            publish: true
           - name: app
             jar: latest
             base: true

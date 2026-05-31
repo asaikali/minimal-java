@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
+#
+# Tutorial: docs/1-pipeline.md (Part 1 — the pipeline & the naive fat jar).
 
 # ===========================================================================
-# Runtime image: fat — the naive baseline, shown only for comparison.
+# Runtime image: fat — the naive baseline and the tutorial's starting point.
 # ===========================================================================
 # The Spring Boot fat jar on the FULL official Temurin JRE, with none of the
 # techniques the series applies (no chisel, no layered extract, no AOT, runs as

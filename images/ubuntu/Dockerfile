@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1
+#
+# Tutorial: docs/2-layering.md (Part 2 — a smaller, better-layered image).
 
 # ===========================================================================
 # Base image: ubuntu — chiseled Ubuntu (base-files + libc6) only.

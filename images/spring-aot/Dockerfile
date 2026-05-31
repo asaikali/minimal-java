@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1
+#
+# Tutorial: docs/3-speed.md (Part 3 — a faster app).
 
 # ===========================================================================
 # Runtime image: spring-aot — the next rung past jvm-aot: the same JDK AOT cache

@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1
+#
+# Tutorial: docs/2-layering.md (Part 2 — a smaller, better-layered image).
 
 # ===========================================================================
 # Runtime image: app — the chiseled jre base + the Spring Boot app, exploded

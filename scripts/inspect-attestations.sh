@@ -46,11 +46,12 @@ if [[ -z "${DEST}" ]]; then
   exit 1
 fi
 
-# Same series push-images.sh publishes (the naive fat baseline isn't published),
-# plus the jar OCI artifact publish-artifact.sh pushes.
+# Same series push-images.sh publishes, plus the jar OCI artifact
+# publish-artifact.sh pushes.
 REFS=(
   "${DEST}/ubuntu:latest"
   "${DEST}/jre:latest"
+  "${DEST}/fat:latest"
   "${DEST}/app:latest"
   "${DEST}/jvm-aot:latest"
   "${DEST}/spring-aot:latest"
