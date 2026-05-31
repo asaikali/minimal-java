@@ -63,24 +63,24 @@ See **[Resources](#resources)** below for talks that go deep on chisel and AOT.
 
 ## Quick start
 
-The helper scripts live in [`scripts/`](scripts), which [mise](https://mise.jdx.dev)
-adds to your `PATH` (run `mise trust` once), so you can call them by name from
-anywhere in the repo. Without mise, run them as `./scripts/<name>`.
+The helper scripts live in [`scripts/`](scripts) — run them by path from the repo
+root (no extra tooling required; if you use [mise](https://mise.jdx.dev) it adds
+`scripts/` to your `PATH` after `mise trust`, so you can drop the `./scripts/`).
 
 ```bash
-build-images.sh         # build ubuntu/jre/app/aot multi-arch + print the size comparison
-run-aot.sh              # run minimal-java:aot -> http://localhost:8080
-curl localhost:8080     # {"author":"...","id":N,"quote":"..."}
+./scripts/build-images.sh   # build ubuntu/jre/app/aot multi-arch + print the size comparison
+./scripts/run-aot.sh        # run minimal-java:aot -> http://localhost:8080
+curl localhost:8080         # {"author":"...","id":N,"quote":"..."}
 ```
 
 Each part of the workflow is also its own script, runnable on its own:
 
 ```bash
-run-app.sh              # run the app image (no AOT) instead of aot
-image-sizes.sh          # re-print the size comparison (no rebuild)
-startup-times.sh        # compare startup time: app vs aot
-cve-counts.sh           # compare CVE counts across the series (Trivy)
-push-images.sh          # publish the built series to ghcr (repo derived from the git remote)
+./scripts/run-app.sh        # run the app image (no AOT) instead of aot
+./scripts/image-sizes.sh    # re-print the size comparison (no rebuild)
+./scripts/startup-times.sh  # compare startup time: app vs aot
+./scripts/cve-counts.sh     # compare CVE counts across the series (Trivy)
+./scripts/push-images.sh    # publish the built series to ghcr (repo derived from the git remote)
 ```
 
 ## Resources
