@@ -3,8 +3,13 @@
 # Build configuration — override any with `--build-arg NAME=value`. These feed
 # the FROM tags below: ubuntu:${UBUNTU_VERSION}, eclipse-temurin:${JAVA_VERSION}-*,
 # the chisel-releases branch ubuntu-${UBUNTU_VERSION}, and the chisel download.
+# Renovate keeps these current: the ubuntu/temurin tags via its built-in Docker
+# manager (it reads the ARG defaults used in the FROM lines), and chisel via the
+# `# renovate:` annotation below — a custom manager in renovate.json — since it's
+# fetched from a GitHub release rather than referenced as an image tag.
 ARG UBUNTU_VERSION=26.04
 ARG JAVA_VERSION=25
+# renovate: datasource=github-releases depName=canonical/chisel versioning=semver
 ARG CHISEL_VERSION=v1.4.1
 
 # ---------------------------------------------------------------------------

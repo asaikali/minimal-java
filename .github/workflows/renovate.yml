@@ -1,0 +1,77 @@
+# =============================================================================
+# Renovate (self-hosted, runs on GitHub Actions)
+# =============================================================================
+#
+# Keeps this repo's dependencies current: the Maven deps in pom.xml (and the
+# Spring Boot parent), the base images in the Dockerfile (ubuntu, eclipse-temurin)
+# and the chisel release it downloads, the Maven wrapper, and the GitHub Actions
+# used below. Configuration lives in ../../renovate.json; the full picture is in
+# ../../docs/renovate.md.
+#
+# Why self-hosted instead of the Mend-hosted Renovate GitHub App:
+# Running Renovate ourselves on GitHub-hosted Actions runners keeps everything
+# inside GitHub's boundary and under our control — no third-party SaaS, and the
+# whole pipeline stays visible in the repo. For a public repo the Mend-hosted App
+# is also fine; this keeps it self-contained.
+#
+# -----------------------------------------------------------------------------
+# Auth: the built-in GITHUB_TOKEN (no setup, no secrets)
+# -----------------------------------------------------------------------------
+# Renovate authenticates with ${{ secrets.GITHUB_TOKEN }}, the token GitHub mints
+# for every workflow run. No GitHub App, no PAT, no repository secrets to manage.
+# The `permissions:` block below grants it exactly what Renovate needs (push
+# branches, open PRs, maintain the Dependency Dashboard issue).
+#
+# One repo setting is required for the token to open PRs:
+#   Settings → Actions → General → Workflow permissions →
+#     enable "Allow GitHub Actions to create and approve pull requests".
+# Without it, the run succeeds but every PR creation is refused.
+#
+# Trade-offs of GITHUB_TOKEN (fine for this repo, see docs/renovate.md):
+#   - PRs it opens do NOT trigger other workflows (GitHub's recursion guard). This
+#     repo has no build/test CI yet, so there's nothing to trigger; if you add CI
+#     and want a green check on Renovate PRs, switch to a GitHub App (the upgrade
+#     path is documented in docs/renovate.md → "Upgrading to a GitHub App").
+#   - GITHUB_TOKEN can't be granted the `workflows` scope, so Renovate won't bump
+#     the action versions pinned in this file. The same App upgrade fixes that.
+#
+# -----------------------------------------------------------------------------
+# Local preview
+# -----------------------------------------------------------------------------
+# Run `./scripts/renovate.sh` to preview what this workflow would propose, without
+# touching GitHub. Useful for tuning renovate.json before the workflow runs for
+# real. Run `./scripts/run-renovate.sh` to dispatch this workflow on demand.
+#
+# =============================================================================
+
+name: Renovate
+
+on:
+  schedule:
+    # Daily at 01:00 UTC. Adjust to match your timezone or release cadence.
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+# Scopes granted to GITHUB_TOKEN for this run. A permissions block grants these
+# regardless of the repo's default workflow-permission setting; it's the explicit,
+# least-privilege set Renovate needs.
+permissions:
+  contents: write        # push Renovate branches and commits
+  pull-requests: write   # open and update PRs
+  issues: write          # create and maintain the Dependency Dashboard issue
+
+jobs:
+  renovate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Self-hosted Renovate
+        uses: renovatebot/github-action@v46.1.14
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          configurationFile: renovate.json
+        env:
+          # Tell Renovate which repository to operate on. Without this it logs
+          # "No repositories found" and exits without doing anything.
+          RENOVATE_REPOSITORIES: ${{ github.repository }}

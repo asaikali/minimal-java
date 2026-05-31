@@ -251,6 +251,23 @@ images and anything you pushed are left alone):
 ./scripts/clean.sh
 ```
 
+## Dependency updates
+
+[Renovate](https://docs.renovatebot.com/) keeps the Maven deps, the Dockerfile's
+base images (`ubuntu`, `eclipse-temurin`) and chisel release, the Maven wrapper,
+and the GitHub Actions current — opening a PR per update and gating major bumps
+behind a Dependency Dashboard checkbox. It's self-hosted, running daily via
+[`.github/workflows/renovate.yml`](.github/workflows/renovate.yml). Preview what
+it would propose without touching GitHub, or trigger a run on demand:
+
+```bash
+./scripts/renovate.sh       # dry-run preview against the working tree (needs Node)
+./scripts/run-renovate.sh   # dispatch the workflow now and tail its logs (needs gh)
+```
+
+See **[`docs/renovate.md`](docs/renovate.md)** for the full setup, the design
+decisions behind it, and the one-time GitHub App configuration a fork needs.
+
 ## Resources
 
 Background material on the topics this repo explores.
