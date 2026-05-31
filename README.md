@@ -54,6 +54,23 @@ scratch
 | `minimal-java:jvm-aot`    | `:jre`    | the app layout **plus** a **JDK 25 AOT cache** (Project Leyden)            | ~146 MB      | ~0.5 s  |
 | `minimal-java:spring-aot` | `:jre`    | the `jvm-aot` layout **plus Spring AOT** — generated bean wiring            | ~145 MB      | ~0.4 s  |
 
+> [!NOTE]
+> **JVM AOT vs Spring AOT — two different things that stack.**
+> - **JVM AOT** (the `jvm-aot` image) is a *JVM* feature — the **Project Leyden AOT
+>   cache** (JEP 514). A build-time *training run* records class loading + linking
+>   (and, on JDK 25, method profiling); the runtime replays it instead of redoing
+>   it. It's framework-agnostic and leaves your application code and beans exactly
+>   as they are.
+> - **Spring AOT** (the `spring-aot` image) is a *Spring* feature — at build time
+>   it generates Java code for the bean wiring, replacing reflection-based context
+>   setup, and **freezes the bean arrangement** (no profile/condition changes at
+>   runtime).
+>
+> They're complementary, so `spring-aot` uses **both**: the JVM AOT cache speeds
+> class loading/linking, and Spring AOT speeds Spring's own startup work — which is
+> why it's the fastest image. See
+> [Project Leyden & AOT](#project-leyden--aot-the-jvm-aot-and-spring-aot-images) for depth.
+
 Under the hood, each image is a named stage in a single multi-stage `Dockerfile`;
 `build-images.sh` builds each one with `docker buildx build --target <name>`,
 multi-arch for `linux/amd64` + `linux/arm64`. The **Size** column is what
