@@ -58,7 +58,7 @@ build app
 build aot
 
 # Size comparison: full Ubuntu base vs each chiseled image, side by side.
-# Delegated to image-stats.sh, which is also runnable on its own to re-check
-# sizes later.
+# Delegated to compare-image-sizes.sh, which is also runnable on its own to
+# re-check sizes later.
 echo
-./image-stats.sh
+./compare-image-sizes.sh

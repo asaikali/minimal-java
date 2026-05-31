@@ -7,7 +7,7 @@
 # own against images already in the local Docker store — handy for re-checking
 # sizes without rebuilding:
 #
-#   ./image-stats.sh
+#   ./compare-image-sizes.sh
 #
 # Reads the Ubuntu version from the Dockerfile's ARG line (the single source of
 # truth) so the base it pulls matches the one the series was chiselled from.
