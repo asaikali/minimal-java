@@ -13,7 +13,7 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Base images use ${ARG}-composed tags (eclipse-temurin:${JAVA_VERSION}-jre, ubuntu:${UBUNTU_VERSION}). Renovate's Docker manager can DETECT these but cannot rewrite the literal tag in place, so non-major PRs just fail to create and clutter the dashboard. Disable non-major updates for them — the Dockerfile keeps its clean major tags (25, 26.04), and a new MAJOR still surfaces on the dashboard so you can bump the ARG by hand. (chisel is unaffected: it's the custom 'regex' manager, which edits its ARG line directly.)",
+      "description": "Base images use ${ARG}-composed tags (eclipse-temurin:${JAVA_VERSION}-jre in images/{jre,fat,app,jvm-aot,spring-aot}/Dockerfile, ubuntu:${UBUNTU_VERSION} in images/ubuntu/Dockerfile). Renovate's Docker manager can DETECT these but cannot rewrite the literal tag in place, so non-major PRs just fail to create and clutter the dashboard. Disable non-major updates for them — the Dockerfiles keep their clean major tags (25, 26.04), and a new MAJOR still surfaces on the dashboard so you can bump the ARG by hand. (chisel is unaffected: it's the custom 'regex' manager, which edits its ARG line directly.)",
       "matchManagers": ["dockerfile"],
       "matchPackageNames": ["eclipse-temurin", "ubuntu"],
       "matchUpdateTypes": ["minor", "patch", "pin", "digest", "pinDigest"],
@@ -22,7 +22,7 @@
   ],
   "customManagers": [
     {
-      "description": "Track the chisel release pinned in the Dockerfile's CHISEL_VERSION ARG. chisel is fetched from a GitHub release URL (not referenced as an image tag), so the Docker manager can't see it — the `# renovate:` annotation above the ARG plus this regex manager edit that ARG line directly. Unlike the ubuntu/temurin base images (whose ${ARG}-composed tags the Docker manager can detect but not rewrite), chisel updates apply cleanly because the version IS the whole ARG value.",
+      "description": "Track the chisel release pinned in images/ubuntu/Dockerfile's CHISEL_VERSION ARG. chisel is fetched from a GitHub release URL (not referenced as an image tag), so the Docker manager can't see it — the `# renovate:` annotation above the ARG plus this regex manager edit that ARG line directly. The managerFilePatterns regex matches any path ending in Dockerfile, so images/*/Dockerfile is covered. Unlike the ubuntu/temurin base images (whose ${ARG}-composed tags the Docker manager can detect but not rewrite), chisel updates apply cleanly because the version IS the whole ARG value.",
       "customType": "regex",
       "managerFilePatterns": ["/(^|/)Dockerfile$/"],
       "matchStrings": [

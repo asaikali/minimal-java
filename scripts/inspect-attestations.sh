@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 #
-# Show the SBOM + SLSA provenance attestations that build-images.sh attached to
-# each image. Attestations travel with the image in a registry, so inspect a
-# copy pushed by push-images.sh (they aren't visible on a local-only image):
+# Show the SBOM + SLSA provenance attestations attached to each published image
+# and to the jar artifact. Attestations travel with the artifact in a registry,
+# so inspect a copy pushed by push-images.sh / publish-artifact.sh (they aren't
+# visible on a local-only image):
 #
-#   build-images.sh            # build (attaches the attestations)
-#   push-images.sh             # push them to the registry
+#   build-images.sh            # build (attaches the image attestations)
+#   push-images.sh             # push the images to the registry
+#   publish-artifact.sh        # push the jar artifact to the registry
 #   inspect-attestations.sh   # inspect them there
 #
-# With no argument the repo defaults to ghcr.io/<owner>/<repo> derived from this
-# repo's GitHub remote (same default as push-images.sh); pass a value to override.
+# Covers the base images (ubuntu, jre), the runtime images (app, jvm-aot,
+# spring-aot), and the jar OCI artifact. With no argument the namespace defaults
+# to ghcr.io/<owner>/<repo> derived from this repo's GitHub remote (same default
+# as push-images.sh); pass a value to override.
 #
 # For each tag this prints `docker buildx imagetools inspect`, whose manifest
 # list shows the per-platform images alongside their attestation manifests
@@ -42,14 +46,22 @@ if [[ -z "${DEST}" ]]; then
   exit 1
 fi
 
-# Same series push-images.sh publishes (the naive fat baseline isn't published).
-TARGETS=(ubuntu jre app jvm-aot spring-aot)
+# Same series push-images.sh publishes (the naive fat baseline isn't published),
+# plus the jar OCI artifact publish-artifact.sh pushes.
+REFS=(
+  "${DEST}/ubuntu:latest"
+  "${DEST}/jre:latest"
+  "${DEST}/app:latest"
+  "${DEST}/jvm-aot:latest"
+  "${DEST}/spring-aot:latest"
+  "${DEST}/jar:latest"
+  "${DEST}/jar:latest-springaot"
+)
 
 # Bold the ">>> <ref>" headers on a terminal; plain when piped.
 if [[ -t 1 ]]; then bold=$'\e[1m'; reset=$'\e[0m'; else bold=""; reset=""; fi
 
-for target in "${TARGETS[@]}"; do
-  ref="${DEST}:${target}"
+for ref in "${REFS[@]}"; do
   echo
   echo "${bold}>>> ${ref}${reset}"
   docker buildx imagetools inspect "${ref}"

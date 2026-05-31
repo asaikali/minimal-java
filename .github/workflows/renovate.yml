@@ -3,8 +3,8 @@
 # =============================================================================
 #
 # Keeps this repo's dependencies current: the Maven deps in pom.xml (and the
-# Spring Boot parent), the base images in the Dockerfile (ubuntu, eclipse-temurin)
-# and the chisel release it downloads, the Maven wrapper, and the GitHub Actions
+# Spring Boot parent), the base images in the images/*/Dockerfile files (ubuntu,
+# eclipse-temurin) and the chisel release they download, the Maven wrapper, and the GitHub Actions
 # used below. Configuration lives in ../../renovate.json; the full picture is in
 # ../../docs/renovate.md.
 #

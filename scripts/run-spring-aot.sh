@@ -4,7 +4,7 @@
 # showcase) built by build-images.sh, publishing its HTTP port. Foreground;
 # Ctrl-C stops it and the container is removed on exit.
 #
-#   run-spring-aot.sh   # docker run minimal-java:spring-aot -> http://localhost:8080
+#   run-spring-aot.sh   # docker run minimal-java/spring-aot:local -> http://localhost:8080
 #
 # Runs hardened, same as run-jvm-aot.sh (the image already builds non-root and
 # shell-less):
@@ -19,11 +19,11 @@
 #
 set -euo pipefail
 
-echo "Running minimal-java:spring-aot -> http://localhost:8080/  (Ctrl-C to stop)"
+echo "Running minimal-java/spring-aot:local -> http://localhost:8080/  (Ctrl-C to stop)"
 exec docker run --rm --name minimal-java-spring-aot \
   --read-only \
   --tmpfs /tmp \
   --cap-drop ALL \
   --security-opt no-new-privileges \
   -p 8080:8080 \
-  minimal-java:spring-aot
+  minimal-java/spring-aot:local

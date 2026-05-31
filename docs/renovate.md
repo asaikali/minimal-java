@@ -44,16 +44,17 @@ small annotation. What's in scope:
   so a bump edits `pom.xml` directly.
 - **Maven wrapper** (`.mvn/wrapper/maven-wrapper.properties`) — the wrapper and
   the Maven distribution it downloads.
-- **Docker base images** (`Dockerfile`) — `ubuntu:${UBUNTU_VERSION}` and
-  `eclipse-temurin:${JAVA_VERSION}-*`. Renovate's Docker manager *detects* these
-  (it resolves the `${ARG}` to read the version) but **cannot rewrite an
-  `${ARG}`-composed tag in place** — it looks for the literal `eclipse-temurin:25-jre`,
-  which isn't in the file. So they're configured to **not** open patch/minor PRs
-  (a `packageRules` entry in `renovate.json` disables those); only a new **major**
-  surfaces on the Dependency Dashboard as a heads-up, and you bump `JAVA_VERSION` /
-  `UBUNTU_VERSION` by hand to keep the tags clean. chisel is the exception — see
-  below.
-- **chisel** (`Dockerfile`) — fetched from a GitHub *release* URL, not referenced
+- **Docker base images** (`images/*/Dockerfile`) — `ubuntu:${UBUNTU_VERSION}` (in
+  `images/ubuntu/Dockerfile`) and `eclipse-temurin:${JAVA_VERSION}-*` (in the jre,
+  fat, app, jvm-aot, and spring-aot Dockerfiles). Renovate's Docker manager scans
+  every `Dockerfile` and *detects* these (it resolves the `${ARG}` to read the
+  version) but **cannot rewrite an `${ARG}`-composed tag in place** — it looks for
+  the literal `eclipse-temurin:25-jre`, which isn't in the file. So they're
+  configured to **not** open patch/minor PRs (a `packageRules` entry in
+  `renovate.json` disables those); only a new **major** surfaces on the Dependency
+  Dashboard as a heads-up, and you bump `JAVA_VERSION` / `UBUNTU_VERSION` by hand to
+  keep the tags clean. chisel is the exception — see below.
+- **chisel** (`images/ubuntu/Dockerfile`) — fetched from a GitHub *release* URL, not referenced
   as an image tag, so the Docker manager can't see it. A `# renovate:` annotation
   above the `CHISEL_VERSION` ARG plus a `customManagers` entry in `renovate.json`
   track it via the `github-releases` datasource.
@@ -63,8 +64,8 @@ small annotation. What's in scope:
   files needs the App's `workflows: write` permission (see [Auth](#auth-a-github-app-not-github_token-or-a-pat)).
 
 > The JDK version appears in two independent places: `<java.version>` in `pom.xml`
-> (the compiler release) and `JAVA_VERSION` in the `Dockerfile` (the runtime JRE).
-> Renovate bumps the Dockerfile's `eclipse-temurin` tag; it does **not** rewrite
+> (the compiler release) and `JAVA_VERSION` in the `images/*/Dockerfile` files (the
+> runtime JRE). Renovate bumps the `eclipse-temurin` tag; it does **not** rewrite
 > the `pom.xml` property. Keep them in step by hand when you move major JDKs.
 
 ## Architectural decisions and why
@@ -224,8 +225,9 @@ Knowing which file a PR touches makes review faster.
 2. **Docker base images (ubuntu / eclipse-temurin)** — *not* auto-PR'd (see
    [What Renovate updates here](#what-renovate-updates-here)): patch/minor updates
    are disabled because Renovate can't rewrite the `${ARG}`-composed tags, and a
-   new major just appears on the dashboard. Bump `JAVA_VERSION` / `UBUNTU_VERSION`
-   in the `Dockerfile` by hand, then rebuild the series locally
+   new major just appears on the dashboard. Bump `JAVA_VERSION` (in the runtime
+   `images/*/Dockerfile` files) / `UBUNTU_VERSION` (in `images/ubuntu/Dockerfile`)
+   by hand, then rebuild the series locally
    ([`scripts/build-images.sh`](../scripts/build-images.sh)) before committing.
 3. **chisel bumps** — *these do* open PRs (the custom manager edits the
    `CHISEL_VERSION` ARG directly). Rebuild the series locally to verify before
@@ -349,10 +351,10 @@ toggle does **not** apply here — that one only gates `GITHUB_TOKEN`.)
 ### chisel isn't being updated
 
 Run `scripts/renovate.sh` and check the "Detected Dependencies" output / log for a
-`canonical/chisel` entry. If it's missing, the `# renovate:` annotation in the
-`Dockerfile` and the `customManagers` regex in `renovate.json` have drifted apart —
-the comment must sit on the line *immediately above* the `ARG CHISEL_VERSION=…`
-line for the regex to match.
+`canonical/chisel` entry. If it's missing, the `# renovate:` annotation in
+`images/ubuntu/Dockerfile` and the `customManagers` regex in `renovate.json` have
+drifted apart — the comment must sit on the line *immediately above* the
+`ARG CHISEL_VERSION=…` line for the regex to match.
 
 ### A base-image (ubuntu/temurin) update isn't opening a PR
 
@@ -360,7 +362,7 @@ That's by design, not a bug. Those tags are `${ARG}`-composed, which Renovate ca
 detect but not rewrite, so a `packageRules` entry disables their patch/minor PRs
 (see [What Renovate updates here](#what-renovate-updates-here)). Only a new **major**
 shows on the dashboard as a heads-up; bump `JAVA_VERSION` / `UBUNTU_VERSION` in the
-`Dockerfile` by hand. If you'd rather have Renovate pin and PR them, remove that
+`images/*/Dockerfile` files by hand. If you'd rather have Renovate pin and PR them, remove that
 `packageRules` entry and add `# renovate:` annotations on the two ARGs like chisel's.
 
 ### A Renovate PR I closed keeps reappearing

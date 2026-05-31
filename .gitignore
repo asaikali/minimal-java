@@ -72,6 +72,9 @@ target/
 !**/src/test/**/target/
 !**/src/testFixtures/**/target/
 
+### Staged jars (scripts/build-images.sh, publish-artifact.sh) ###
+/stage/
+
 ###############################################################################
 #  JavaScript
 ###############################################################################

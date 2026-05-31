@@ -1,12 +1,15 @@
-# Keep the build context small and reproducible. The build needs only the
-# Maven project (pom.xml, src, mvnw, .mvn); the helper scripts, docs, and tool
-# config never go into an image, so excluding them also keeps the build cache
-# from busting when they change.
+# Fallback ignore for builds run from the repo root. The decoupled pipelines no
+# longer build from here — base images use images/<name>/ as their context and the
+# runtime images use stage/<variant>/ (just application.jar), so each context is
+# already tiny. This list still applies if you `docker build .` from the root
+# (e.g. ad-hoc experiments), keeping the context small and reproducible.
 .git
 target
+stage
 .idea
 *.iml
 scripts
+images
 k8s
 mise.toml
 *.md

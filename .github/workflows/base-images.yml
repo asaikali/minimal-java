@@ -1,0 +1,139 @@
+# =============================================================================
+# Base Images — build + publish the platform base layer (ubuntu, jre) to ghcr.
+# =============================================================================
+#
+# The "platform team" pipeline of the decoupled series. It owns the two base
+# images and publishes them to ghcr.io/<owner>/<repo>/{ubuntu,jre}, each its own
+# repository. jre is built FROM the ubuntu base, pinned by DIGEST (not a floating
+# tag) so the published jre records exactly which base it sits on — the same
+# supply-chain provenance the runtime images then inherit.
+#
+# Triggers only on changes to images/ubuntu/** or images/jre/** (plus this file),
+# so a base change reships the base without touching the app pipelines. On a push
+# to main (or manual dispatch) it publishes; on a pull request it build-validates
+# only — and validates jre against the LAST-PUBLISHED ubuntu base (the decoupled
+# pipelines can't rebuild the whole world per PR), so the very first publish must
+# run on main before jre PR validation has a base to build on.
+# =============================================================================
+
+name: Base Images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - images/ubuntu/**
+      - images/jre/**
+      - .github/workflows/base-images.yml
+  pull_request:
+    paths:
+      - images/ubuntu/**
+      - images/jre/**
+      - .github/workflows/base-images.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write   # push images to ghcr (GITHUB_TOKEN)
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # ubuntu: the chiseled base. Built multi-arch; pushed on main, validated on PR.
+  # Exposes its pushed digest as a job output so the jre job can pin to it.
+  # ---------------------------------------------------------------------------
+  ubuntu:
+    runs-on: ubuntu-24.04
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v6
+
+      # ghcr namespace, lowercased (image refs must be lowercase; an owner can
+      # have capitals). IMAGE_BASE = ghcr.io/<owner>/<repo>.
+      - name: Resolve image namespace
+        run: echo "IMAGE_BASE=${REGISTRY}/${REPO,,}" >> "$GITHUB_ENV"
+        env:
+          REPO: ${{ github.repository }}
+
+      # QEMU/binfmt so the amd64 runner can build linux/arm64 (the chisel slice
+      # cut runs per-arch) by emulation; buildx for multi-platform + push.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      # Only authenticate when we're going to push (skipped on PRs, incl. forks
+      # where packages:write is downgraded to read).
+      - name: Log in to ghcr
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ubuntu
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: images/ubuntu
+          file: images/ubuntu/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          sbom: true
+          provenance: mode=max
+          tags: |
+            ${{ env.IMAGE_BASE }}/ubuntu:latest
+            ${{ env.IMAGE_BASE }}/ubuntu:${{ github.sha }}
+
+  # ---------------------------------------------------------------------------
+  # jre: the trimmed Temurin JRE on the chiseled base. On push it builds FROM the
+  # ubuntu digest this run just published; on PR it builds FROM the last-published
+  # ubuntu:latest (it has no freshly-pushed digest to pin to).
+  # ---------------------------------------------------------------------------
+  jre:
+    needs: ubuntu
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve image namespace
+        run: echo "IMAGE_BASE=${REGISTRY}/${REPO,,}" >> "$GITHUB_ENV"
+        env:
+          REPO: ${{ github.repository }}
+
+      # Pick the ubuntu base ref: the exact digest from this run on push, or the
+      # last-published tag on PR.
+      - name: Resolve ubuntu base ref
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "UBUNTU_BASE=${IMAGE_BASE}/ubuntu:latest" >> "$GITHUB_ENV"
+          else
+            echo "UBUNTU_BASE=${IMAGE_BASE}/ubuntu@${{ needs.ubuntu.outputs.digest }}" >> "$GITHUB_ENV"
+          fi
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push jre
+        uses: docker/build-push-action@v6
+        with:
+          context: images/jre
+          file: images/jre/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          sbom: true
+          provenance: mode=max
+          build-args: |
+            UBUNTU_BASE=${{ env.UBUNTU_BASE }}
+          tags: |
+            ${{ env.IMAGE_BASE }}/jre:latest
+            ${{ env.IMAGE_BASE }}/jre:${{ github.sha }}

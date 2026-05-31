@@ -8,8 +8,12 @@ web app's container can get — built up **one technique at a time**.
 The application is a typical Spring Boot 4 service: Java 25, Spring MVC exposing a
 REST API, backed by Spring Data JPA / Hibernate over an H2 database with Flyway
 migrations (it returns a random quote). It's intentionally small so the focus stays
-on the **`Dockerfile`**, which defines a *series* of images, each adding one
-focused technique, so you can see what each step costs and what it contributes.
+on the **build and packaging pipeline**: a *series* of container images, each
+adding one focused technique, so you can see what each step costs and what it
+contributes. Each image has its own `Dockerfile` under [`images/`](images), wired
+into **three decoupled pipelines** — base images, the application artifact, and
+containerization — that hand off through a registry, the way a real platform/app
+team split the work (see [How the images are built](#how-the-images-are-built-three-pipelines)).
 
 ## Highlights
 
@@ -19,7 +23,11 @@ focused technique, so you can see what each step costs and what it contributes.
 - **Multi-arch** — `linux/amd64` + `linux/arm64` from one command.
 - **Reproducible & self-contained** — in-container build, pinned versions.
 - **Supply-chain ready** — every image carries an SBOM + SLSA build provenance
-  attestation (inspect with `docker buildx imagetools inspect` once pushed).
+  attestation (inspect with `docker buildx imagetools inspect` once pushed), and
+  each pipeline pins its inputs by **digest**.
+- **Decoupled pipelines** — the jar is built once and published as an OCI artifact;
+  separate pipelines package it into runtime images, each publishable to ghcr on
+  its own schedule.
 
 ## The image series
 
@@ -41,24 +49,27 @@ scratch
       └─ spring-aot  jvm-aot layout + Spring AOT             — fastest startup
 ```
 
-| Image                     | Builds on | Adds (the technique)                                                       | Size (amd64) | Startup |
-| ------------------------- | --------- | -------------------------------------------------------------------------- | ------------ | ------- |
-| `ubuntu:26.04` (full)     | —         | the whole distro, for reference                                            | ~42 MB       | —       |
-| `minimal-java:ubuntu`     | `scratch` | Canonical **chisel** — built bottom-up from package *slices* (no shell/apt) | ~2.5 MB     | —       |
-| `minimal-java:jre`        | `:ubuntu` | **trimmed Temurin JRE 25** — standalone launchers removed                  | ~65 MB       | —       |
-| `minimal-java:fat`        | full JRE  | **naive baseline** — fat jar on the full Temurin JRE, no techniques        | ~170 MB      | ~2.0 s  |
-| `minimal-java:app`        | `:jre`    | Spring Boot **layered jar**, exploded into cache-friendly layers           | ~119 MB      | ~1.6 s  |
-| `minimal-java:jvm-aot`    | `:jre`    | the app layout **plus** a **JDK 25 AOT cache** (Project Leyden)            | ~146 MB      | ~0.5 s  |
-| `minimal-java:spring-aot` | `:jre`    | the `jvm-aot` layout **plus Spring AOT** — generated bean wiring            | ~145 MB      | ~0.4 s  |
+| Image                      | Builds on | Adds (the technique)                                                       | Size (amd64) | Startup |
+| -------------------------- | --------- | -------------------------------------------------------------------------- | ------------ | ------- |
+| `ubuntu:26.04` (full)      | —         | the whole distro, for reference                                            | ~42 MB       | —       |
+| `minimal-java/ubuntu`      | `scratch` | Canonical **chisel** — built bottom-up from package *slices* (no shell/apt) | ~2.5 MB     | —       |
+| `minimal-java/jre`         | `ubuntu`  | **trimmed Temurin JRE 25** — standalone launchers removed                  | ~65 MB       | —       |
+| `minimal-java/fat`         | full JRE  | **naive baseline** — fat jar on the full Temurin JRE, no techniques        | ~170 MB      | ~2.0 s  |
+| `minimal-java/app`         | `jre`     | Spring Boot **layered jar**, exploded into cache-friendly layers           | ~119 MB      | ~1.6 s  |
+| `minimal-java/jvm-aot`     | `jre`     | the app layout **plus** a **JDK 25 AOT cache** (Project Leyden)            | ~146 MB      | ~0.5 s  |
+| `minimal-java/spring-aot`  | `jre`     | the `jvm-aot` layout **plus Spring AOT** — generated bean wiring            | ~145 MB      | ~0.4 s  |
 
-Under the hood, each image is a named stage in a single multi-stage `Dockerfile`;
-`build-images.sh` builds each one with `docker buildx build --target <name>`,
-multi-arch for `linux/amd64` + `linux/arm64`. The **Size** column is what
-`image-sizes.sh` prints; the **Startup** column is what
-`startup-times.sh` reports (Spring Boot's own startup time) — both
-reproducible on your own machine. `cve-counts.sh` does the same for the security
-story, counting CVEs per image (the OS attack surface drops to zero at the
-chiseled `ubuntu`/`jre` layers).
+Each image has its own `Dockerfile` under [`images/<name>/`](images), built for
+`linux/amd64` + `linux/arm64`. Locally, `build-images.sh` wires them together —
+base images, then the jar, then the runtime images — tagging each
+`minimal-java/<name>:local`; in CI the same images are built and published to
+`ghcr.io/<owner>/<repo>/<name>` by three separate pipelines (see
+[How the images are built](#how-the-images-are-built-three-pipelines)). The
+**Size** column is what `image-sizes.sh` prints; the **Startup** column is what
+`startup-times.sh` reports (Spring Boot's own startup time) — both reproducible on
+your own machine. `cve-counts.sh` does the same for the security story, counting
+CVEs per image (the OS attack surface drops to zero at the chiseled
+`ubuntu`/`jre` layers).
 
 See **[Resources](#resources)** below for talks that go deep on chisel and AOT.
 
@@ -66,6 +77,69 @@ See **[Resources](#resources)** below for talks that go deep on chisel and AOT.
 trade-offs (Spring AOT freezes your bean graph at build time) — see
 [**JVM AOT vs Spring AOT**](#jvm-aot-vs-spring-aot) (after the tutorial) before
 choosing one for production.
+
+## How the images are built: three pipelines
+
+A naive setup builds everything from one big multi-stage `Dockerfile`. That's
+tidy for a demo, but it hides how real teams ship: a **platform team** publishes
+golden base images, the application is **built once** into an artifact, and
+**separate packaging pipelines** turn that artifact into runnable images. This
+repo is organized that way — three pipelines that hand off through an OCI
+**registry**, with every hand-off pinned by **digest**:
+
+```
+  BASE IMAGES            images/ubuntu  ──▶  ghcr.io/<owner>/<repo>/ubuntu
+  (platform layer)       images/jre     ──▶  ghcr.io/<owner>/<repo>/jre   (FROM ubuntu@sha256:…)
+                                                      │ FROM jre@sha256:…
+  ARTIFACT               mvn package    ──▶  ghcr.io/<owner>/<repo>/jar:<ver>            (plain)
+  (build once)           mvn -Pspringaot ─▶  ghcr.io/<owner>/<repo>/jar:<ver>-springaot (Spring AOT)
+                                                      │ oras pull
+                                                      ▼
+  CONTAINERIZE           images/fat ─ app ─ jvm-aot ─ spring-aot
+  (package per image)    each: oras pull the jar + FROM the jre digest ──▶ ghcr.io/<owner>/<repo>/<name>
+```
+
+- **Base images** ([`images/ubuntu`](images/ubuntu), [`images/jre`](images/jre)) —
+  the chiseled OS and the trimmed JRE. `jre` is built `FROM` the `ubuntu` base; in
+  CI that reference is a **digest**, so the published `jre` records exactly which
+  base it sits on. Built and published by
+  [`base-images.yml`](.github/workflows/base-images.yml), triggered only by changes
+  under `images/ubuntu/**` or `images/jre/**`.
+- **Artifact** ([`scripts/publish-artifact.sh`](scripts/publish-artifact.sh)) — the
+  Spring Boot jar, built **once** (it's architecture-independent) and pushed to the
+  registry as a first-class OCI artifact with [ORAS](https://oras.land), *not* as a
+  container image. Spring AOT needs its own build (`-Pspringaot`), so **two** jars
+  are published: the plain one (feeds `fat`/`app`/`jvm-aot`) and the Spring-AOT one
+  (feeds `spring-aot`). Published by [`artifact.yml`](.github/workflows/artifact.yml),
+  triggered by changes under `src/**` or `pom.xml`.
+- **Containerize** ([`images/fat`](images/fat), [`images/app`](images/app),
+  [`images/jvm-aot`](images/jvm-aot), [`images/spring-aot`](images/spring-aot)) —
+  one Dockerfile per runtime image. Each `oras pull`s the jar into its build context
+  (the Dockerfile just `COPY`s `application.jar`) and builds `FROM` the published
+  `jre` base. No recompilation happens here — the jar came from the Artifact
+  pipeline, the base from the Base Images pipeline.
+  [`containerize.yml`](.github/workflows/containerize.yml) runs one matrix job per
+  image after the upstream pipelines finish on `main`.
+
+Two details fall out of this split:
+
+- **The base reference is an `ARG`.** Each runtime Dockerfile takes
+  `ARG JRE_BASE` (and `images/jre` takes `ARG UBUNTU_BASE`) defaulting to the local
+  `:local` tag, so an offline `build-images.sh` just works against images in your
+  daemon's store. CI overrides it with the **digest-pinned** ghcr reference, so the
+  published image is reproducible and provenance-accurate — a floating tag here
+  would quietly undermine the very supply-chain story the repo teaches.
+- **The jar is arch-independent; the AOT cache is not.** `fat` and `app` are pure
+  assembly (`COPY` the same jar onto each arch's base). `jvm-aot`/`spring-aot` run a
+  `java` *training run* that writes an arch-specific `app.aot`, so those steps
+  execute Java on the target arch (a native arm64 runner, or QEMU emulation as used
+  here).
+
+Locally, [`build-images.sh`](scripts/build-images.sh) runs all three stages on one
+machine, using the **daemon's image store** as the hand-off instead of ghcr (so
+`FROM minimal-java/jre:local` resolves without a registry) and feeding the jar from
+a small `stage/` context instead of `oras pull`. The Tutorial below uses that local
+flow; the CI workflows do the same work, publishing to ghcr.
 
 ## Tutorial
 
@@ -89,35 +163,38 @@ letting you drop the `./scripts/` prefix.
 
 ### Step 1 — Build the image series
 
-Build all six images (the five chiseled targets plus the `fat` baseline),
+Run the whole local pipeline — base images, the jar, then the runtime images —
 multi-arch for `linux/amd64` + `linux/arm64`:
 
 ```bash
 ./scripts/build-images.sh
 ```
 
-The first run creates an on-demand `chisel-builder` buildx builder, then builds
-each Dockerfile target smallest-first (`ubuntu` → `jre` → `app` → `jvm-aot` →
-`spring-aot` → `fat`).
-You'll see BuildKit progress for each, and because the build is multi-arch, the
-`jre` trim step runs *emulated* for the non-native arch — so that one is
-noticeably slower on its first build. When it finishes it prints the size table
-(the same one [`image-sizes.sh`](scripts/image-sizes.sh) shows on its own):
+It builds the two base images (`ubuntu` → `jre`), compiles the jar twice (plain +
+Spring AOT) into a small `stage/` context, then builds the four runtime images
+(`fat`, `app`, `jvm-aot`, `spring-aot`) — each `FROM` the `jre` base's local tag,
+tagged `minimal-java/<name>:local`. It uses the **docker-driver buildx builder**
+bound to your current context (not a `docker-container` builder), because that one
+reads the local image store, so each image resolves `FROM` the previous one without
+a registry. Because the build is multi-arch, the `jre` trim and the AOT training
+runs execute *emulated* for the non-native arch — so those are noticeably slower.
+When it finishes it prints the size table (the same one
+[`image-sizes.sh`](scripts/image-sizes.sh) shows on its own):
 
 ```
 Size comparison (image size, decimal MB):
 
   image                            amd64       arm64
   ubuntu:26.04 (full)            41.6 MB     40.7 MB
-  minimal-java:ubuntu             2.5 MB      1.7 MB
-  minimal-java:jre               65.4 MB     63.5 MB
-  minimal-java:fat (naive)      170.2 MB    168.3 MB
-  minimal-java:app              118.7 MB    116.7 MB
-  minimal-java:jvm-aot          145.6 MB    143.6 MB
-  minimal-java:spring-aot       144.7 MB    142.8 MB
+  minimal-java/ubuntu             2.5 MB      1.7 MB
+  minimal-java/jre               65.4 MB     63.5 MB
+  minimal-java/fat (naive)      170.2 MB    168.3 MB
+  minimal-java/app              118.7 MB    116.7 MB
+  minimal-java/jvm-aot          145.6 MB    143.6 MB
+  minimal-java/spring-aot       144.7 MB    142.8 MB
 ```
 
-Read it top-down: full Ubuntu is **~42 MB**, but the chiseled `minimal-java:ubuntu`
+Read it top-down: full Ubuntu is **~42 MB**, but the chiseled `minimal-java/ubuntu`
 base is **~2.5 MB** — same real Ubuntu bits, only the slices we asked for. Adding a
 trimmed JRE gets you to `jre`, and the whole Spring Boot app (`app`) lands at
 **~119 MB** — **smaller than the naive `fat` baseline (~170 MB)**, which carries the
@@ -211,16 +288,16 @@ Scan every image with [Trivy](https://trivy.dev) and print a per-severity recap
 === CVE summary (Trivy — counts per severity) ===
   image                         C    H    M    L
   ubuntu:26.04                  0    8   56    3
-  minimal-java:ubuntu           0    0    0    0
-  minimal-java:jre              0    0    0    0
-  minimal-java:fat              3   11   62    4
-  minimal-java:app              3    3    0    1
-  minimal-java:jvm-aot          3    3    0    1
-  minimal-java:spring-aot       3    3    0    1
+  minimal-java/ubuntu           0    0    0    0
+  minimal-java/jre              0    0    0    0
+  minimal-java/fat              3   11   62    4
+  minimal-java/app              3    3    0    1
+  minimal-java/jvm-aot          3    3    0    1
+  minimal-java/spring-aot       3    3    0    1
 ```
 
 This is the security half of the story. Full `ubuntu:26.04` carries dozens of OS
-findings; the chiseled `minimal-java:ubuntu` and `jre` images report **zero** —
+findings; the chiseled `minimal-java/ubuntu` and `jre` images report **zero** —
 the OS attack surface is gone because those packages simply aren't in the image.
 The naive `fat` baseline inherits the full JRE's OS packages on top of the app's
 jars (62 medium findings alone). The `app`/`jvm-aot`/`spring-aot` images keep the OS at zero; their
@@ -229,8 +306,8 @@ the base — exactly what you'd then triage by updating dependencies.
 
 ### Step 6 — Deploy to Kubernetes (optional)
 
-[`k8s/deployment.yaml`](k8s/deployment.yaml) runs `minimal-java:spring-aot` on Docker
-Desktop's Kubernetes, carrying the same hardening as Step 2 (non-root, read-only
+[`k8s/deployment.yaml`](k8s/deployment.yaml) runs `minimal-java/spring-aot:local` on
+Docker Desktop's Kubernetes, carrying the same hardening as Step 2 (non-root, read-only
 root filesystem, all capabilities dropped) plus `httpGet` probes — there's no
 shell in the image to run an exec health check. It uses the image you built
 locally (`imagePullPolicy: IfNotPresent`, no registry needed) and exposes it on a
@@ -244,24 +321,28 @@ kubectl delete -f k8s/deployment.yaml
 
 ### Step 7 — Publish + inspect supply-chain attestations (optional)
 
-The build attached an SBOM and SLSA build provenance to each image. Those travel
-with the image in a registry (they aren't visible on a local-only image), so push
-first, then inspect:
+In CI the three pipelines publish to ghcr automatically (see
+[How the images are built](#how-the-images-are-built-three-pipelines)). You can also
+publish from your machine: push the jar artifact, push the images, then inspect the
+SBOM + SLSA provenance attestations — which travel with each artifact in a registry
+(they aren't visible on a local-only image):
 
 ```bash
-docker login ghcr.io                  # or: gh auth token | docker login ghcr.io -u <you> --password-stdin
-./scripts/push-images.sh              # retag + push the series -> ghcr.io/<owner>/<repo>
-./scripts/inspect-attestations.sh     # show each image's SBOM + provenance manifests
+gh auth token | docker login ghcr.io -u <you> --password-stdin
+gh auth token | oras login   ghcr.io -u <you> --password-stdin
+./scripts/publish-artifact.sh         # build + oras-push the jar -> ghcr.io/<owner>/<repo>/jar
+./scripts/push-images.sh              # retag + push the images -> ghcr.io/<owner>/<repo>/<name>
+./scripts/inspect-attestations.sh     # show each image + the jar artifact's manifests
 ```
 
-With no argument both scripts derive `ghcr.io/<owner>/<repo>` from this repo's
+With no argument all three scripts derive `ghcr.io/<owner>/<repo>` from this repo's
 git remote; pass a repo to override.
 
 ### Clean up
 
-Remove everything the tutorial created locally — the `minimal-java:*` images, any
-containers they left behind, and the `chisel-builder` builder (upstream base
-images and anything you pushed are left alone):
+Remove everything the tutorial created locally — the `minimal-java/*:local` images,
+any containers they left behind, and the staged jars (upstream base images, the
+shared buildx builder, and anything you pushed are left alone):
 
 ```bash
 ./scripts/clean.sh
@@ -352,9 +433,10 @@ for the background talk.
 
 ## Dependency updates
 
-[Renovate](https://docs.renovatebot.com/) keeps the Maven deps, the Dockerfile's
-base images (`ubuntu`, `eclipse-temurin`) and chisel release, the Maven wrapper,
-and the GitHub Actions current — opening a PR per update and gating major bumps
+[Renovate](https://docs.renovatebot.com/) keeps the Maven deps, the base images
+(`ubuntu`, `eclipse-temurin`) and chisel release pinned in the `images/*/Dockerfile`
+files, the Maven wrapper, and the GitHub Actions current — opening a PR per update
+and gating major bumps
 behind a Dependency Dashboard checkbox. It's self-hosted, running daily via
 [`.github/workflows/renovate.yml`](.github/workflows/renovate.yml). Preview what
 it would propose without touching GitHub, or trigger a run on demand:

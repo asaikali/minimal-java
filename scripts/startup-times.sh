@@ -27,8 +27,8 @@ if [[ -t 1 ]]; then bold=$'\e[1m'; reset=$'\e[0m'; else bold=""; reset=""; fi
 # summary printed once all are done.
 boot() {
   local logs
-  echo ">>> minimal-java:$1"
-  docker run --name "bench-$1" -p "${PORT}:8080" -d "minimal-java:$1" >/dev/null
+  echo ">>> minimal-java/$1:local"
+  docker run --name "bench-$1" -p "${PORT}:8080" -d "minimal-java/$1:local" >/dev/null
   until curl -fsS -o /dev/null "http://localhost:${PORT}/" 2>/dev/null; do sleep 0.1; done
 
   logs="$(docker logs "bench-$1" 2>&1)"

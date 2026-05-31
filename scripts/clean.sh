@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 #
-# Remove what build-images.sh, run-*.sh and startup-times.sh create locally: the
-# minimal-java:* images, any containers they leave behind, and the chisel-builder
-# buildx builder. Upstream base images (ubuntu, eclipse-temurin) are left alone,
-# as are any ghcr.io/<repo>:* tags push-images.sh created.
+# Remove what build-images.sh, publish-artifact.sh, run-*.sh and startup-times.sh
+# create locally: the minimal-java/*:local images, any containers they leave
+# behind, and the staged jars. Upstream base images (ubuntu, eclipse-temurin),
+# the shared buildx builder, and any ghcr.io tags push-images.sh created are left
+# alone.
 #
 #   ./scripts/clean.sh
 #
 set -euo pipefail
+
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
 # Force-remove a container or image if it exists, reporting only what was there.
 rm_container() { docker rm -f "$1"       >/dev/null 2>&1 && echo "removed container $1" || true; }
@@ -24,14 +27,14 @@ rm_container bench-jvm-aot
 rm_container bench-spring-aot
 
 # The built image series.
-rm_image minimal-java:ubuntu
-rm_image minimal-java:jre
-rm_image minimal-java:fat
-rm_image minimal-java:app
-rm_image minimal-java:jvm-aot
-rm_image minimal-java:spring-aot
+rm_image minimal-java/ubuntu:local
+rm_image minimal-java/jre:local
+rm_image minimal-java/fat:local
+rm_image minimal-java/app:local
+rm_image minimal-java/jvm-aot:local
+rm_image minimal-java/spring-aot:local
 
-# The on-demand multi-arch builder.
-docker buildx rm chisel-builder >/dev/null 2>&1 && echo "removed buildx builder chisel-builder" || true
+# The staged jars produced by publish-artifact.sh --local.
+rm -rf stage && echo "removed stage/" || true
 
 echo "clean."

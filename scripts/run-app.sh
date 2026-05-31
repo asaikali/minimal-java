@@ -3,7 +3,7 @@
 # Run the app image (no AOT) built by build-images.sh, publishing its HTTP
 # port. Foreground; Ctrl-C stops it and the container is removed on exit.
 #
-#   run-app.sh   # docker run minimal-java:app -> http://localhost:8080
+#   run-app.sh   # docker run minimal-java/app:local -> http://localhost:8080
 #
 # Runs hardened, to show the secure-runtime half of the story (the image already
 # builds non-root and shell-less):
@@ -18,11 +18,11 @@
 #
 set -euo pipefail
 
-echo "Running minimal-java:app -> http://localhost:8080/  (Ctrl-C to stop)"
+echo "Running minimal-java/app:local -> http://localhost:8080/  (Ctrl-C to stop)"
 exec docker run --rm --name minimal-java-app \
   --read-only \
   --tmpfs /tmp \
   --cap-drop ALL \
   --security-opt no-new-privileges \
   -p 8080:8080 \
-  minimal-java:app
+  minimal-java/app:local

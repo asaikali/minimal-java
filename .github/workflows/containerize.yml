@@ -1,0 +1,118 @@
+# =============================================================================
+# Containerize — package each runtime image from the published base + jar.
+# =============================================================================
+#
+# The "package the software" pipelines. One matrix job per runtime image; each
+# pulls the pre-built jar artifact (oras) and builds FROM the published jre base
+# pinned by DIGEST, then publishes ghcr.io/<owner>/<repo>/<name>. Nothing is
+# recompiled here — the jar came from the Artifact pipeline, the base from the
+# Base Images pipeline. The registry is the hand-off point between all three.
+#
+#   fat        : full Temurin JRE + the plain jar (naive baseline; built but NOT
+#                published — it exists only for the local size/startup compare)
+#   app        : jre base + the exploded plain jar
+#   jvm-aot    : app + a JDK AOT cache (training run; arch-specific, emulated for arm64)
+#   spring-aot : jre base + the exploded Spring-AOT jar + a JDK AOT cache
+#
+# Runs after Base Images OR Artifact finishes on main (whichever reshipped an
+# input), and on demand. On a pull request it build-validates the changed image
+# against the LAST-PUBLISHED base + jar and does not push — so the base/jar must
+# have been published once before PR validation has inputs to pull.
+# =============================================================================
+
+name: Containerize
+
+on:
+  workflow_run:
+    workflows: [Base Images, Artifact]
+    types: [completed]
+    branches: [main]
+  pull_request:
+    paths:
+      - images/fat/**
+      - images/app/**
+      - images/jvm-aot/**
+      - images/spring-aot/**
+      - .github/workflows/containerize.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write   # pull the jar/base and push the runtime images (GITHUB_TOKEN)
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  containerize:
+    # Skip if the upstream workflow_run failed; always run for PR/dispatch.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: fat
+            jar: latest
+            base: false
+            publish: false
+          - name: app
+            jar: latest
+            base: true
+            publish: true
+          - name: jvm-aot
+            jar: latest
+            base: true
+            publish: true
+          - name: spring-aot
+            jar: latest-springaot
+            base: true
+            publish: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve image namespace
+        run: echo "IMAGE_BASE=${REGISTRY}/${REPO,,}" >> "$GITHUB_ENV"
+        env:
+          REPO: ${{ github.repository }}
+
+      # QEMU so the arm64 AOT training run (jvm-aot/spring-aot) can execute under
+      # emulation; buildx for multi-platform + push. fat/app run no per-arch code.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      # Authenticate to pull the jar artifact + base image and to push the result.
+      - name: Log in to ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@v1
+
+      # Pull the jar into the build context (Dockerfiles just COPY application.jar),
+      # and for runtime-on-jre images resolve the jre base to an immutable digest.
+      - name: Resolve build inputs
+        run: |
+          mkdir -p ctx
+          oras pull "${IMAGE_BASE}/jar:${{ matrix.jar }}" --output ctx
+          if [[ "${{ matrix.base }}" == "true" ]]; then
+            digest="$(docker buildx imagetools inspect "${IMAGE_BASE}/jre:latest" --format '{{.Manifest.Digest}}')"
+            echo "BUILD_ARGS=JRE_BASE=${IMAGE_BASE}/jre@${digest}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build and push ${{ matrix.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ctx
+          file: images/${{ matrix.name }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ matrix.publish && github.event_name != 'pull_request' }}
+          sbom: true
+          provenance: mode=max
+          build-args: ${{ env.BUILD_ARGS }}
+          tags: |
+            ${{ env.IMAGE_BASE }}/${{ matrix.name }}:latest
+            ${{ env.IMAGE_BASE }}/${{ matrix.name }}:${{ github.sha }}

@@ -1,78 +1,87 @@
 #!/usr/bin/env bash
 #
-# Build the series of chiseled-Ubuntu images defined in ./Dockerfile, one per
-# Dockerfile target, each progressively richer:
+# Build the whole decoupled image series locally, end to end, so the compare
+# scripts (image-sizes.sh, cve-counts.sh, startup-times.sh) have everything to
+# work with. This drives the same three stages CI runs as separate pipelines,
+# but wired together on one machine:
 #
-#   ubuntu    — chiseled Ubuntu (base-files + libc6) only
-#   jre       — chiseled ubuntu + a trimmed Eclipse Temurin JRE 25
-#   app       — jre + the Spring Boot app, exploded into Spring Boot layers
-#   jvm-aot   — jre + the app layout + a JDK 25 AOT cache, for faster startup
-#   spring-aot — jvm-aot + Spring AOT, for the fastest startup
+#   base images      images/ubuntu  -> minimal-java/ubuntu:local
+#                    images/jre     -> minimal-java/jre:local   (FROM the ubuntu base)
+#   artifact         mvn package x2 -> stage/{plain,springaot}/application.jar
+#   runtime images   images/fat        (full JRE + the plain jar — naive baseline)
+#                    images/app        (jre base + exploded plain jar)
+#                    images/jvm-aot     (app + JDK AOT cache)
+#                    images/spring-aot  (Spring-AOT jar + JDK AOT cache)
 #
-# Each is built multi-arch (linux/amd64 + linux/arm64) so it runs on both
-# Apple Silicon Macs and amd64 Linux, and tagged minimal-java:<target>.
+# In CI the registry (ghcr.io) is the hand-off point between these stages, with
+# everything pinned by digest. Locally the hand-off is the daemon's image store:
+# each runtime image is built FROM the jre base's local tag, and the jar arrives
+# pre-built in a tiny build context (stage/<variant>/) instead of via `oras pull`.
 #
-# Builds both arches and loads each manifest into the local Docker store so you
-# can run them immediately. Loading a multi-arch manifest requires the containerd
-# image store (Docker Desktop: Settings > General > "Use containerd for pulling
-# and storing images"); the legacy image store can't hold one.
+# Each image is built multi-arch (linux/amd64 + linux/arm64) and loaded into the
+# local store so you can run either arch immediately. Override the set with e.g.
+# `PLATFORMS=linux/arm64 ./scripts/build-images.sh` for a faster native-only build.
 #
-#   build-images.sh    # build minimal-java:{ubuntu,jre,app,jvm-aot,spring-aot}
+# Requirements (Docker Desktop's defaults satisfy both):
+#   - the containerd image store, to --load a multi-arch manifest
+#     (Settings > General > "Use containerd for pulling and storing images");
+#   - QEMU/binfmt, so the non-native arch's RUN steps (the JRE trim and the AOT
+#     training runs) can execute under emulation.
 #
-# To publish the built series to a registry, build first, then push-images.sh.
+# Versions (Ubuntu, JRE, chisel) are NOT set here — they live in the per-image
+# Dockerfiles' ARG lines, the single source of truth Renovate updates.
 #
-# Image versions (Ubuntu, JRE, chisel) are NOT set here — they live in the
-# Dockerfile's ARG lines, the single source of truth. To change one, edit the
-# Dockerfile (which is also what Renovate updates).
+# To publish to a registry, see scripts/publish-artifact.sh (the jar) and
+# scripts/push-images.sh (the images), or the CI workflows under .github/.
 #
 set -euo pipefail
 
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
-BUILDER="chisel-builder"
+NS="minimal-java"           # local image namespace: minimal-java/<name>:local
+PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 
-# Multi-platform builds and QEMU emulation need the docker-container driver;
-# the default "docker" driver can't do either. Create the builder on demand.
-if ! docker buildx inspect "${BUILDER}" >/dev/null 2>&1; then
-  echo "Creating buildx builder '${BUILDER}' (docker-container driver)..."
-  docker buildx create --name "${BUILDER}" --driver docker-container --bootstrap >/dev/null
-fi
+# Use the docker-driver buildx builder bound to the current context (its name IS
+# the context name). Unlike a docker-container builder, the docker driver reads
+# the local image store, so each image can be built FROM the previous one's
+# :local tag — the cross-image hand-off the decoupled series depends on. With the
+# containerd image store it still builds multi-arch and --loads.
+BUILDER="$(docker context show 2>/dev/null || echo default)"
 
-# Build one Dockerfile target multi-arch and load it into the local Docker store
-# as minimal-java:<target>. --sbom/--provenance attach a Software Bill of
-# Materials and SLSA build provenance to each image; they travel with it when
-# pushed, where `docker buildx imagetools inspect <registry-ref>` can show them
-# (attestations aren't inspectable on a local-only image).
-build() {
-  local target="$1"
+# --sbom/--provenance attach a Software Bill of Materials and SLSA build
+# provenance to each image; they travel with it when pushed, where
+# `docker buildx imagetools inspect <ref>` can show them (not on a local image).
+build() {  # $1 = image name, $2 = build context dir, rest = extra build args
+  local name="$1" context="$2"; shift 2
   echo
-  echo ">>> minimal-java:${target} (--target ${target})"
+  echo ">>> ${NS}/${name}:local"
   docker buildx build \
     --builder "${BUILDER}" \
-    --platform linux/amd64,linux/arm64 \
+    --platform "${PLATFORMS}" \
     --sbom=true --provenance=mode=max \
-    --target "${target}" --tag "minimal-java:${target}" --load .
+    -f "images/${name}/Dockerfile" \
+    "$@" \
+    --tag "${NS}/${name}:local" --load "${context}"
 }
 
-# Build the series, smallest first. The jre build runs a RUN step (trimming the
-# JRE launchers) that executes emulated for the non-native arch, so its first
-# build is noticeably slower than the others.
-build ubuntu
-build jre
-build app
-build jvm-aot
+# 1. Base images. The jre build runs a RUN step (trimming the JRE launchers) that
+#    executes emulated for the non-native arch, so it's slower than ubuntu. jre is
+#    built FROM the ubuntu base's local tag.
+build ubuntu images/ubuntu
+build jre    images/jre --build-arg "UBUNTU_BASE=${NS}/ubuntu:local"
 
-# spring-aot: the next rung past jvm-aot — the JDK AOT cache PLUS Spring AOT. Its
-# build runs Spring's process-aot (the -Pspringaot Maven profile) before the
-# training run, so its build step is a little slower than jvm-aot's.
-build spring-aot
+# 2. Artifact. Build the plain + Spring-AOT jars once and stage them under
+#    stage/{plain,springaot}/application.jar (the runtime builds' contexts).
+"$(dirname "$0")/publish-artifact.sh" --local
 
-# The naive baseline, for the comparison scripts: the fat jar on the full
-# Temurin JRE, with none of the techniques applied.
-build fat
+# 3. Runtime images, each FROM the jre base, consuming a staged jar as context.
+#    fat is the naive baseline (full Temurin JRE, plain jar, no techniques).
+build fat        stage/plain
+build app        stage/plain     --build-arg "JRE_BASE=${NS}/jre:local"
+build jvm-aot    stage/plain     --build-arg "JRE_BASE=${NS}/jre:local"
+build spring-aot stage/springaot --build-arg "JRE_BASE=${NS}/jre:local"
 
 # Size comparison: full Ubuntu base vs each chiseled image, side by side.
-# Delegated to image-sizes.sh, which is also runnable on its own to
-# re-check sizes later.
+# Delegated to image-sizes.sh, which is also runnable on its own.
 echo
 "$(dirname "$0")/image-sizes.sh"

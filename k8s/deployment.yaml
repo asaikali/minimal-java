@@ -1,8 +1,10 @@
-# Sample deployment of the chiseled minimal-java:spring-aot image on Docker Desktop's
-# Kubernetes. Assumes kubectl points at the docker-desktop cluster and the image
-# was built locally (./scripts/build-images.sh) — Docker Desktop shares its
-# containerd image store with Kubernetes, so imagePullPolicy: IfNotPresent finds
-# the local image without a registry.
+# Sample deployment of the chiseled minimal-java/spring-aot:local image on Docker
+# Desktop's Kubernetes. Assumes kubectl points at the docker-desktop cluster and
+# the image was built locally (./scripts/build-images.sh) — Docker Desktop shares
+# its containerd image store with Kubernetes, so imagePullPolicy: IfNotPresent
+# finds the local image without a registry. To run a published image instead,
+# swap in a ghcr.io/<owner>/minimal-java/spring-aot reference (ideally @sha256
+# digest-pinned) and drop imagePullPolicy.
 #
 #   ./scripts/build-images.sh
 #   kubectl apply -f k8s/deployment.yaml
@@ -43,7 +45,7 @@ spec:
           type: RuntimeDefault    # apply the container runtime's default syscall allowlist
       containers:
         - name: app
-          image: minimal-java:spring-aot
+          image: minimal-java/spring-aot:local
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
