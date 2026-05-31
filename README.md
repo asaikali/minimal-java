@@ -81,6 +81,7 @@ Each part of the workflow is also its own script, runnable on its own:
 ./scripts/startup-times.sh  # compare startup time: app vs aot
 ./scripts/cve-counts.sh     # compare CVE counts across the series (Trivy)
 ./scripts/push-images.sh    # publish the built series to ghcr (repo derived from the git remote)
+./scripts/clean.sh          # remove the built images, their containers, and the buildx builder
 ```
 
 ## Kubernetes
