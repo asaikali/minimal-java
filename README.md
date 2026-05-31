@@ -83,6 +83,21 @@ Each part of the workflow is also its own script, runnable on its own:
 ./scripts/push-images.sh    # publish the built series to ghcr (repo derived from the git remote)
 ```
 
+## Kubernetes
+
+[`k8s/deployment.yaml`](k8s/deployment.yaml) runs `minimal-java:aot` on Docker
+Desktop's Kubernetes, carrying the same hardening `run-aot.sh` uses (non-root,
+read-only root filesystem, all capabilities dropped, `httpGet` probes since the
+image has no shell). It uses the locally-built image (`imagePullPolicy:
+IfNotPresent`) and a NodePort:
+
+```bash
+./scripts/build-images.sh             # build the image first
+kubectl apply -f k8s/deployment.yaml
+curl localhost:30080                  # -> a random quote
+kubectl delete -f k8s/deployment.yaml
+```
+
 ## Resources
 
 Background material on the topics this repo explores.

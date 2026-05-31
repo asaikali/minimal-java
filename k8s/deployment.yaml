@@ -1,0 +1,95 @@
+# Sample deployment of the chiseled minimal-java:aot image on Docker Desktop's
+# Kubernetes. Assumes kubectl points at the docker-desktop cluster and the image
+# was built locally (./scripts/build-images.sh) — Docker Desktop shares its
+# containerd image store with Kubernetes, so imagePullPolicy: IfNotPresent finds
+# the local image without a registry.
+#
+#   ./scripts/build-images.sh
+#   kubectl apply -f k8s/deployment.yaml
+#   curl localhost:30080                  # -> a random quote
+#   kubectl delete -f k8s/deployment.yaml
+#
+# The securityContext mirrors what run-aot.sh demonstrates with `docker run`:
+# non-root (the image's 10001:10001), a read-only root filesystem, all Linux
+# capabilities dropped, and no privilege escalation. A read-only rootfs still
+# needs a writable /tmp for the JVM/Tomcat scratch files, provided here by an
+# emptyDir (add `medium: Memory` to mirror docker's in-memory --tmpfs). There is
+# no shell in the image to run an exec health check, so the probes use httpGet —
+# the same reason run-aot.sh notes for not using a Docker HEALTHCHECK.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minimal-java
+  labels:
+    app: minimal-java
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minimal-java
+  template:
+    metadata:
+      labels:
+        app: minimal-java
+    spec:
+      # Pod-level hardening. The image already declares USER 10001:10001; this
+      # makes it explicit and lets Kubernetes enforce it.
+      securityContext:
+        runAsNonRoot: true        # refuse to schedule the pod if it would run as root (UID 0)
+        runAsUser: 10001          # run as the image's non-root user
+        runAsGroup: 10001         # ...and its group
+        seccompProfile:
+          type: RuntimeDefault    # apply the container runtime's default syscall allowlist
+      containers:
+        - name: app
+          image: minimal-java:aot
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          # Container-level hardening — the same guarantees run-aot.sh sets with
+          # docker run flags.
+          securityContext:
+            allowPrivilegeEscalation: false   # block gaining more privileges than the parent (e.g. via setuid)
+            readOnlyRootFilesystem: true      # the root filesystem is immutable; writes need an explicit volume
+            capabilities:
+              drop: ["ALL"]                   # drop every Linux capability; this app needs none
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8080
+            periodSeconds: 1
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minimal-java
+  labels:
+    app: minimal-java
+spec:
+  type: NodePort
+  selector:
+    app: minimal-java
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080
