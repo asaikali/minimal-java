@@ -8,7 +8,7 @@
 #
 # Deliberately runs PLAIN — no hardening flags. fat is the Spring Boot fat jar on
 # the full Temurin JRE: it runs as root, on a full OS with a shell and package
-# manager. That's the starting point. Part 2 (docs/2-layering.md) introduces the
+# manager. That's the starting point. Part 2 (docs/2-size.md) introduces the
 # chiseled, non-root image and the hardened run-app.sh that drops capabilities and
 # makes the root filesystem read-only — compare the two to see what hardening adds.
 #

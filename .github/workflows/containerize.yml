@@ -29,10 +29,10 @@ on:
     branches: [main]
   pull_request:
     paths:
-      - images/fat/**
-      - images/app/**
-      - images/jvm-aot/**
-      - images/spring-aot/**
+      - images/1-naive/fat/**
+      - images/2-size/app/**
+      - images/3-speed/jvm-aot/**
+      - images/3-speed/spring-aot/**
       - .github/workflows/containerize.yml
   workflow_dispatch:
 
@@ -53,18 +53,22 @@ jobs:
       matrix:
         include:
           - name: fat
+            dir: 1-naive/fat
             jar: latest
             base: false
             publish: true
           - name: app
+            dir: 2-size/app
             jar: latest
             base: true
             publish: true
           - name: jvm-aot
+            dir: 3-speed/jvm-aot
             jar: latest
             base: true
             publish: true
           - name: spring-aot
+            dir: 3-speed/spring-aot
             jar: latest-springaot
             base: true
             publish: true
@@ -107,7 +111,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ctx
-          file: images/${{ matrix.name }}/Dockerfile
+          file: images/${{ matrix.dir }}/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: ${{ matrix.publish && github.event_name != 'pull_request' }}
           sbom: true

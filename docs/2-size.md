@@ -15,7 +15,7 @@ It also introduces a new pipeline — because once we stop using the upstream fu
 
 ## Move 1 — a chiseled Ubuntu base (and the base-images pipeline)
 
-[`images/ubuntu/Dockerfile`](../images/ubuntu) builds a base from **scratch** using
+[`images/2-size/ubuntu/Dockerfile`](../images/2-size/ubuntu) builds a base from **scratch** using
 Canonical's [**chisel**](https://github.com/canonical/chisel): instead of inflating a
 full distro and trimming it, it assembles a filesystem from **slices** of Ubuntu
 packages — here just `base-files` and `libc6_libs`. The result is the *real* Ubuntu
@@ -29,8 +29,8 @@ team publishes golden base images on their own schedule. It publishes
 **pinned by digest**:
 
 ```
-  images/ubuntu  ──▶  ghcr.io/<owner>/<repo>/ubuntu
-  images/jre     ──▶  ghcr.io/<owner>/<repo>/jre      (FROM ubuntu@sha256:…)
+  images/2-size/ubuntu  ──▶  ghcr.io/<owner>/<repo>/ubuntu
+  images/2-size/jre     ──▶  ghcr.io/<owner>/<repo>/jre      (FROM ubuntu@sha256:…)
 ```
 
 Pinning by digest (not a floating tag) means the published `jre` records *exactly*
@@ -41,7 +41,7 @@ just work.
 
 ## Move 2 — a trimmed JRE
 
-[`images/jre/Dockerfile`](../images/jre) takes the official Temurin JRE, drops the
+[`images/2-size/jre/Dockerfile`](../images/2-size/jre) takes the official Temurin JRE, drops the
 standalone launchers a running service never invokes (`jfr`, `jrunscript`,
 `jwebserver`, `keytool`, `rmiregistry`), and copies just the runtime onto the chiseled
 base. `libc6` (from the ubuntu base) is the only dependency it needs. Result: ~65 MB,
@@ -49,7 +49,7 @@ still no shell or package manager.
 
 ## Move 3 — explode the Spring Boot jar into layers
 
-[`images/app/Dockerfile`](../images/app) builds `FROM` the `jre` base and, instead of
+[`images/2-size/app/Dockerfile`](../images/2-size/app) builds `FROM` the `jre` base and, instead of
 copying one fat jar, extracts the Spring Boot **layered** jar and copies each layer
 separately, ordered slowest-changing first:
 

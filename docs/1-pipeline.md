@@ -1,6 +1,6 @@
 # Part 1 — The pipeline & the naive fat jar
 
-> **minimal-java tutorial** · **Part 1** · [Part 2 — a smaller image →](2-layering.md) · [Part 3 — a faster app →](3-speed.md) · [↑ Overview](../README.md)
+> **minimal-java tutorial** · **Part 1** · [Part 2 — a smaller image →](2-size.md) · [Part 3 — a faster app →](3-speed.md) · [↑ Overview](../README.md)
 
 Before optimizing anything, get the whole machine running end to end with the
 **simplest possible image**. This part builds a Spring Boot app into a container and
@@ -37,12 +37,12 @@ registry**, each input pinned by **digest**:
   PUBLISH THE ARTIFACT oras push    ──▶  ghcr.io/<owner>/<repo>/jar:<ver>   (the jar as an OCI artifact)
                                                   │ oras pull
                                                   ▼
-  CONTAINERIZE         images/fat   ──▶  ghcr.io/<owner>/<repo>/fat        (FROM the full Temurin JRE)
+  CONTAINERIZE         images/1-naive/fat   ──▶  ghcr.io/<owner>/<repo>/fat        (FROM the full Temurin JRE)
 ```
 
 Notice what's *not* here yet: there's no custom base image — `fat` builds `FROM` the
 upstream `eclipse-temurin` JRE. We introduce a base-image pipeline in
-[Part 2](2-layering.md), once we want something smaller than the full JRE.
+[Part 2](2-size.md), once we want something smaller than the full JRE.
 
 ### Stage 1 — build the jar
 
@@ -69,7 +69,7 @@ Spring-AOT one for [Part 3](3-speed.md); `fat` uses the plain one.)
 
 ### Stage 3 — containerize
 
-[`images/fat/Dockerfile`](../images/fat) is the whole "package it" step — and it's tiny:
+[`images/1-naive/fat/Dockerfile`](../images/1-naive/fat) is the whole "package it" step — and it's tiny:
 
 ```dockerfile
 FROM eclipse-temurin:25-jre
@@ -139,8 +139,8 @@ baseline:
 - It runs as **root**, and `run-fat.sh` runs it with no hardening at all.
 
 So: **can we do better?** Can the image be dramatically smaller and carry far fewer
-CVEs, without changing the app? That's [Part 2](2-layering.md).
+CVEs, without changing the app? That's [Part 2](2-size.md).
 
 ---
 
-> **Next:** [Part 2 — a smaller, better-layered image →](2-layering.md)
+> **Next:** [Part 2 — a smaller, better-layered image →](2-size.md)

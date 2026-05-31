@@ -1,15 +1,15 @@
 # Part 3 — A faster app
 
-> **minimal-java tutorial** · [← Part 1](1-pipeline.md) · [← Part 2](2-layering.md) · **Part 3** · [↑ Overview](../README.md)
+> **minimal-java tutorial** · [← Part 1](1-pipeline.md) · [← Part 2](2-size.md) · **Part 3** · [↑ Overview](../README.md)
 
-[Part 2](2-layering.md) made the image small and CVE-free, but it still starts in
+[Part 2](2-size.md) made the image small and CVE-free, but it still starts in
 ~1.6 s. This part answers **"can it start faster?"** with two **stacking** ahead-of-time
 techniques — a JVM feature and a Spring feature — that together take startup to ~0.4 s,
 **about 4.8× faster than the `fat` baseline**. As before, the app doesn't change.
 
 ## jvm-aot — the JDK 25 AOT cache
 
-[`images/jvm-aot/Dockerfile`](../images/jvm-aot) is the `app` layout plus a **JDK AOT
+[`images/3-speed/jvm-aot/Dockerfile`](../images/3-speed/jvm-aot) is the `app` layout plus a **JDK AOT
 cache** (Project Leyden, JEP 514). A build-time **training run** boots the app, lets
 Spring refresh the context, then exits — recording class loading + linking into
 `app.aot`; the runtime replays it instead of redoing the work every boot:
@@ -28,7 +28,7 @@ to buy the startup win.
 
 ## spring-aot — add Spring AOT on top
 
-[`images/spring-aot/Dockerfile`](../images/spring-aot) stacks **Spring AOT** on the JDK
+[`images/3-speed/spring-aot/Dockerfile`](../images/3-speed/spring-aot) stacks **Spring AOT** on the JDK
 AOT cache. Spring AOT runs at the Maven build (`-Pspringaot`), generating bean-wiring
 code — which is why [Part 1's artifact pipeline](1-pipeline.md#stage-2--publish-the-jar-as-an-oci-artifact)
 publishes a **second** jar. This image consumes that Spring-AOT jar and adds
@@ -143,7 +143,7 @@ here; the trade-off only shows up once an app wires beans by profile or conditio
 ## Deploy the result to Kubernetes
 
 [`k8s/deployment.yaml`](../k8s/deployment.yaml) runs `minimal-java/spring-aot:local` on
-Docker Desktop's Kubernetes, carrying the same hardening as [Part 2](2-layering.md#run-it--now-hardened)
+Docker Desktop's Kubernetes, carrying the same hardening as [Part 2](2-size.md#run-it--now-hardened)
 (non-root, read-only root filesystem, all capabilities dropped) plus `httpGet` probes —
 there's no shell in the image to run an exec health check. It uses the image you built
 locally (`imagePullPolicy: IfNotPresent`, no registry needed):
@@ -222,4 +222,4 @@ Remove everything the tutorial created locally (images, containers, staged jars)
 
 ---
 
-> That's the end of the tutorial. [↑ Back to the overview](../README.md) · [← Part 1](1-pipeline.md) · [← Part 2](2-layering.md)
+> That's the end of the tutorial. [↑ Back to the overview](../README.md) · [← Part 1](1-pipeline.md) · [← Part 2](2-size.md)

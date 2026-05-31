@@ -17,7 +17,7 @@ set -euo pipefail
 
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
-UBUNTU_VERSION="$(sed -n 's/^ARG UBUNTU_VERSION=//p' images/ubuntu/Dockerfile)"
+UBUNTU_VERSION="$(sed -n 's/^ARG UBUNTU_VERSION=//p' images/2-size/ubuntu/Dockerfile)"
 
 # inspect reads only local images, so pull the full Ubuntu base (both arches)
 # first; the minimal-java/*:local images are already local from the build.

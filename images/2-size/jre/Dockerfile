@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# Tutorial: docs/2-layering.md (Part 2 — a smaller, better-layered image).
+# Tutorial: docs/2-size.md (Part 2 — a smaller, better-layered image).
 
 # ===========================================================================
 # Base image: jre — the chiseled ubuntu base + a trimmed Eclipse Temurin JRE.
