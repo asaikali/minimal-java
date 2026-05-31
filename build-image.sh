@@ -57,6 +57,10 @@ build jre
 build app
 build aot
 
+# The naive baseline, for the comparison scripts: the fat jar on the full
+# Temurin JRE, with none of the techniques applied.
+build fat
+
 # Size comparison: full Ubuntu base vs each chiseled image, side by side.
 # Delegated to compare-image-sizes.sh, which is also runnable on its own to
 # re-check sizes later.

@@ -25,11 +25,14 @@ UBUNTU_VERSION="$(sed -n 's/^ARG UBUNTU_VERSION=//p' Dockerfile)"
 docker pull --quiet --platform linux/amd64 "ubuntu:${UBUNTU_VERSION}" >/dev/null
 docker pull --quiet --platform linux/arm64 "ubuntu:${UBUNTU_VERSION}" >/dev/null
 
-# Full ubuntu baseline first, then the chiseled series smallest -> largest.
+# Full ubuntu baseline and the naive fat-jar image first, then the chiseled
+# series smallest -> largest.
 # --tree prints per-architecture sizes in MB (no manual formatting needed).
-echo "Size comparison (ubuntu base -> chiseled series):"
+echo "Size comparison (ubuntu base + naive fat jar -> chiseled series):"
 echo
 docker image ls --tree "ubuntu:${UBUNTU_VERSION}"
+echo
+docker image ls --tree "minimal-java:fat"
 echo
 docker image ls --tree "minimal-java:ubuntu"
 echo

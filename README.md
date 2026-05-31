@@ -21,12 +21,17 @@ focused technique, so you can see what each step costs and what it contributes.
 
 ## The image series
 
-`./build-image.sh` produces four images. `ubuntu` and `jre` build up the runtime
-in a line; then `app` and `aot` are two **sibling** packagings of the same Spring
-Boot app on top of `jre` — `app` favors a smaller image, `aot` trades a larger
-image for faster startup (full `ubuntu:26.04` is shown only for comparison):
+`./build-image.sh` produces five images. `fat` is the naive baseline — the Spring
+Boot fat jar on the full Temurin JRE, with none of the techniques applied. The
+rest are the chiseled series: `ubuntu` and `jre` build up the runtime in a line,
+then `app` and `aot` are two **sibling** packagings of the same Spring Boot app on
+top of `jre` — `app` favors a smaller image, `aot` trades a larger image for
+faster startup (full `ubuntu:26.04` is shown only for comparison):
 
 ```
+eclipse-temurin:25-jre (full)
+└─ fat       Spring Boot fat jar, no techniques  — the naive baseline
+
 scratch
 └─ ubuntu    chiseled Ubuntu (base-files + libc6)
    └─ jre     trimmed Temurin JRE 25
@@ -37,6 +42,7 @@ scratch
 | Image                 | Builds on | Adds (the technique)                                                       | Size (amd64) | Startup |
 | --------------------- | --------- | -------------------------------------------------------------------------- | ------------ | ------- |
 | `ubuntu:26.04` (full) | —         | the whole distro, for reference                                            | ~157 MB      | —       |
+| `minimal-java:fat`    | full JRE  | **naive baseline** — fat jar on the full Temurin JRE, no techniques        | ~170 MB      | ~2.2 s  |
 | `minimal-java:ubuntu` | `scratch` | Canonical **chisel** — built bottom-up from package *slices* (no shell/apt) | ~2.5 MB     | —       |
 | `minimal-java:jre`    | `:ubuntu` | **trimmed Temurin JRE 25** — standalone launchers removed                  | ~65 MB       | —       |
 | `minimal-java:app`    | `:jre`    | Spring Boot **layered jar**, exploded into cache-friendly layers           | ~119 MB      | ~1.8 s  |
