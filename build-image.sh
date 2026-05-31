@@ -66,7 +66,7 @@ build aot
 build fat
 
 # Size comparison: full Ubuntu base vs each chiseled image, side by side.
-# Delegated to compare-image-sizes.sh, which is also runnable on its own to
+# Delegated to image-sizes.sh, which is also runnable on its own to
 # re-check sizes later.
 echo
-./compare-image-sizes.sh
+./image-sizes.sh

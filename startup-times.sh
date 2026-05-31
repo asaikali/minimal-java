@@ -8,7 +8,7 @@
 # behind the README's "~3.6x faster startup" claim.
 #
 #   ./build-image.sh             # build the images first
-#   ./compare-startup-times.sh
+#   ./startup-times.sh
 #
 set -euo pipefail
 
