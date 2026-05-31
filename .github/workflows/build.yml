@@ -1,0 +1,47 @@
+# =============================================================================
+# Build — compile, test, and package the app on every push and pull request.
+# =============================================================================
+#
+# This is the CI gate. It runs `./mvnw verify`, which compiles the code, runs the
+# tests (the @SpringBootTest in src/test against an in-memory H2), and packages the
+# Spring Boot jar. A green check here is the signal that an upgrade is safe — which
+# is the whole point of the Renovate PRs opened by .github/workflows/renovate.yml:
+# Renovate authenticates as a GitHub App, so the PRs it opens trigger this workflow
+# normally (PRs opened with the built-in GITHUB_TOKEN would not).
+#
+# It does NOT build the Docker image series here — that's a multi-arch buildx job
+# better run on demand via scripts/build-images.sh. This workflow stays a fast,
+# plain Maven build.
+#
+# =============================================================================
+
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      # Java 25 to match <java.version> in pom.xml. cache: maven restores the
+      # ~/.m2 repository between runs so dependencies aren't re-downloaded.
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      # -B (batch mode) keeps the log clean and non-interactive. verify runs the
+      # full check + test + package lifecycle.
+      - name: Build
+        run: ./mvnw -B verify
