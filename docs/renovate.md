@@ -19,7 +19,7 @@ the code.
 │                                                      │
 │   • Daily at 01:00 UTC                               │
 │   • Plus on-demand via workflow_dispatch             │
-│   • Authenticates with the built-in GITHUB_TOKEN     │
+│   • Authenticates as a GitHub App                    │
 │   • Runs the renovatebot/github-action               │
 └─────────────────────────────────────────────────────┘
                           │
@@ -52,10 +52,9 @@ small annotation. What's in scope:
   above the `CHISEL_VERSION` ARG plus a `customManagers` entry in `renovate.json`
   track it via the `github-releases` datasource.
 - **GitHub Actions** (`.github/workflows/*.yml`) — the actions pinned in the
-  Renovate workflow itself (`actions/checkout`, `renovatebot/github-action`), and
-  any others you add later. Note: updating these requires a GitHub App token (see
-  "Upgrading to a GitHub App"); the built-in GITHUB_TOKEN can't write to workflow
-  files.
+  Renovate workflow itself (`actions/checkout`, `actions/create-github-app-token`,
+  `renovatebot/github-action`), and any others you add later. Updating workflow
+  files needs the App's `workflows: write` permission (see [Auth](#auth-a-github-app-not-github_token-or-a-pat)).
 
 > The JDK version appears in two independent places: `<java.version>` in `pom.xml`
 > (the compiler release) and `JAVA_VERSION` in the `Dockerfile` (the runtime JRE).
@@ -77,29 +76,41 @@ For a fully public repo like this one, the Mend-hosted App is also a fine choice
 (no workflow, no secrets to manage) and equally functional. This setup mirrors
 the self-hosted approach used across these templates for consistency.
 
-### Built-in GITHUB_TOKEN, not an App or a PAT
+### Auth: a GitHub App, not GITHUB_TOKEN or a PAT
 
-The workflow authenticates with `${{ secrets.GITHUB_TOKEN }}` — the token GitHub
-mints automatically for every workflow run. No GitHub App, no Personal Access
-Token, no repository secrets to create or rotate. For a single public repo with
-no CI, this is the simplest setup that works, and it keeps the whole pipeline
-self-contained.
+Renovate has to authenticate to the GitHub API — it pushes branches, opens PRs,
+and maintains the Dependency Dashboard issue. Self-hosting decides *where Renovate
+runs* (our Actions runners); it doesn't remove the need for a credential. We
+authenticate as a **GitHub App**, minting a short-lived installation token at
+runtime with [`actions/create-github-app-token`](https://github.com/actions/create-github-app-token).
 
-The only repo-side requirement is one toggle (see [Setup](#setup)): GITHUB_TOKEN
-may open PRs only when *Allow GitHub Actions to create and approve pull requests*
-is enabled.
+We started with the built-in `GITHUB_TOKEN` because it needs no setup, then hit a
+wall — which is the clearest argument for the App:
 
-This trades away two things, both acceptable here:
+> **`GITHUB_TOKEN` cannot open pull requests** unless the repo enables *Settings →
+> Actions → General → "Allow GitHub Actions to create and approve pull requests"*,
+> which is **off by default**. With it off, the Renovate run reports *success* but
+> opens nothing — every update just sits on the Dependency Dashboard, which looks
+> like a silent failure. Turning it on also relaxes a repo-wide security setting
+> for *all* Actions, not just Renovate.
 
-1. **PRs opened with GITHUB_TOKEN don't trigger other workflows** — GitHub's
-   recursion guard (without it, a workflow opening a PR could trigger another that
-   opens another, forever). There's no CI in this repo to trigger yet (see
-   [A note on CI](#a-note-on-ci)); if you add some and want a green check on
-   Renovate PRs, move to a GitHub App (see
-   [Upgrading to a GitHub App](#upgrading-to-a-github-app)).
-2. **GITHUB_TOKEN can't be granted the `workflows` scope**, so Renovate won't bump
-   the action versions pinned in `.github/workflows/`. The same App upgrade fixes
-   that.
+A GitHub App installation token is a **different actor**, so it is **not subject to
+that toggle** — Renovate opens PRs out of the box, and you leave the security
+setting alone. Two more reasons the App wins as the repo grows:
+
+1. **PRs opened by `GITHUB_TOKEN` don't trigger other workflows** — GitHub's
+   recursion guard (without it, a workflow opening a PR could loop forever). So any
+   CI you add (e.g. `./mvnw verify`) would never run on a Renovate PR, defeating the
+   point of an auto-verified upgrade (see [A note on CI](#a-note-on-ci)). App-token
+   PRs have a different actor, so CI triggers normally.
+2. **`GITHUB_TOKEN` can't hold the `workflows` scope**, so it can't update the
+   actions pinned in `.github/workflows/`. The App (Workflows: write) can.
+
+And why an App rather than a **PAT**: a PAT is owned by an individual (it breaks
+when that person leaves or rotates it) and is a long-lived broad-scope secret. An
+App is owned by the account/org, scoped per-install, and its token expires in ~1
+hour — the repo only stores the App ID and private key. See [Setup](#setup) for the
+one-time configuration.
 
 ### Major-version bumps gated behind dashboard approval
 
@@ -140,15 +151,18 @@ background noise.
 
 ## A note on CI
 
-There's no automatic green check on Renovate PRs the way a CI-equipped repo would
-have, because **this repo doesn't yet ship a build/test CI workflow**. The point
-of an upgrade PR is that CI runs on it automatically, so a green check confirms
-the upgrade is safe. Until you add a workflow (e.g. one running `./mvnw verify`,
-and ideally a `docker buildx build` of the image series), review and test Renovate
-PRs manually — build and run locally with the [`scripts/`](../scripts) helpers
-before merging. Adding CI also means revisiting auth: PRs opened by GITHUB_TOKEN
-don't trigger other workflows, so to get a green check on Renovate PRs you'd
-switch to a GitHub App (see [Upgrading to a GitHub App](#upgrading-to-a-github-app)).
+The CI gate is [`.github/workflows/build.yml`](../.github/workflows/build.yml),
+which runs `./mvnw verify` (compile + test + package) on every push and pull
+request. A green check there is the signal that an upgrade is safe, which is the
+whole point of an auto-opened upgrade PR. It runs on Renovate's PRs automatically:
+because Renovate authenticates as a GitHub App (not `GITHUB_TOKEN`), the PRs it
+opens trigger other workflows normally (see [Auth](#auth-a-github-app-not-github_token-or-a-pat)).
+
+`build.yml` intentionally does **not** build the Docker image series — that's a
+multi-arch buildx job better run on demand with
+[`scripts/build-images.sh`](../scripts/build-images.sh). So for Docker base-image
+and chisel bumps, the green Maven check confirms the code still builds, but rebuild
+the image locally before merging (see [Reviewing a Renovate PR](#reviewing-a-renovate-pr)).
 
 ## The Dependency Dashboard
 
@@ -249,10 +263,11 @@ limitation, not real failures.
 
 ### Reviewing a Renovate PR
 
-1. **Build it.** Until this repo has CI (see "A note on CI"), this is the
-   load-bearing signal. For Maven bumps run `./mvnw verify`; for Docker/chisel
-   bumps run [`scripts/build-images.sh`](../scripts/build-images.sh) and a quick
-   [`scripts/run-app.sh`](../scripts/run-app.sh) + `curl`.
+1. **Check the green check.** [`build.yml`](../.github/workflows/build.yml) runs
+   `./mvnw verify` on the PR — the load-bearing signal that it still compiles and
+   tests pass. CI doesn't build the Docker image, so for Docker base-image and
+   chisel bumps also run [`scripts/build-images.sh`](../scripts/build-images.sh)
+   and a quick [`scripts/run-app.sh`](../scripts/run-app.sh) + `curl` before merging.
 2. **Read the release notes.** Renovate links them in the PR body. For
    patches/minors they're usually bug fixes — skim. For majors, read carefully.
 3. **Look at the diff.** Confirm the changed version matches what the title says,
@@ -264,53 +279,45 @@ force the rebase immediately rather than waiting for the schedule.
 
 ## Setup
 
-There are no secrets to configure. The only requirement is one repo toggle so the
-built-in GITHUB_TOKEN is allowed to open PRs:
+Until the GitHub App is created, installed, and its two secrets exist, the workflow
+runs on schedule but can't open PRs. One-time steps (the workflow header at
+[`.github/workflows/renovate.yml`](../.github/workflows/renovate.yml) carries the
+same list inline):
 
-> Settings → Actions → General → Workflow permissions →
-> enable **"Allow GitHub Actions to create and approve pull requests"**.
+1. **Create a GitHub App.** Settings → Developer settings → GitHub Apps → *New
+   GitHub App* (personal- or org-owned). Give it a name, leave the homepage URL as
+   anything, **uncheck Webhook → Active** (Renovate polls; no callback needed), and
+   grant these **repository permissions**:
+   - Contents: Read and write — push branches and commits
+   - Pull requests: Read and write — open and update PRs
+   - Issues: Read and write — maintain the Dependency Dashboard issue
+   - Workflows: Read and write — let Renovate update files in `.github/workflows/`
+   - Metadata: Read — granted automatically
+2. **Generate a private key** (App settings → *Generate a private key*) and
+   download the PEM file.
+3. **Install the App** on this repository (App page → *Install App* → choose the
+   account → select this repo, or "All repositories"). You create the App and key
+   **once** and reuse them across every repo; only the install list and the secrets
+   are per-repo.
+4. **Add two repository secrets** (repo → Settings → Secrets and variables →
+   Actions → *New repository secret*):
+   - `RENOVATE_APP_ID` — the App's numeric App ID (shown on the App settings page)
+   - `RENOVATE_APP_PRIVATE_KEY` — the entire PEM contents, including the
+     `-----BEGIN…` / `-----END…` lines
 
-With that enabled, the daily schedule (or a manual `run-renovate.sh`) opens PRs
-and maintains the Dependency Dashboard. Without it, the workflow run still
-*succeeds* but PR creation is refused — that's the first thing to check if runs
-finish but nothing appears.
+The workflow's first step mints an installation token from those secrets
+(`actions/create-github-app-token`), and a pre-flight step then does one repo read
+so a misinstalled App fails within a second with a clear error rather than after a
+full scan. **No "Allow GitHub Actions to create and approve pull requests" toggle is
+needed** — that setting only gates `GITHUB_TOKEN`, and the App token isn't subject
+to it.
 
-### Upgrading to a GitHub App
-
-Switch to a GitHub App when you want CI to run on Renovate PRs (PRs opened by
-GITHUB_TOKEN don't trigger other workflows), want Renovate to update the action
-versions in `.github/workflows/`, or want to drive many repos from one identity.
-An App is org- or personal-owned and mints short-lived per-run tokens. Steps:
-
-1. **Create a GitHub App** with these repository permissions:
-   - Contents: Read and write
-   - Pull requests: Read and write
-   - Issues: Read and write
-   - Workflows: Read and write
-   - Metadata: Read (granted automatically)
-2. **Generate a private key** for the App and download the PEM file.
-3. **Install the App** on this repository (you create the App and key *once* and
-   reuse them across every repo; the install can target "All repositories").
-4. **Add two repository secrets**: `RENOVATE_APP_ID` (numeric App ID) and
-   `RENOVATE_APP_PRIVATE_KEY` (full PEM contents).
-5. **In the workflow**, mint a token from those secrets and pass it to Renovate
-   instead of GITHUB_TOKEN:
-
-   ```yaml
-   - name: Generate GitHub App installation token
-     id: app-token
-     uses: actions/create-github-app-token@v3
-     with:
-       app-id: ${{ secrets.RENOVATE_APP_ID }}
-       private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
-   # ...then in the Renovate step: token: ${{ steps.app-token.outputs.token }}
-   ```
-
-On a **personal account there are no account-wide Actions secrets**, so the two
-secrets live per-repo (the App and key themselves are still created only once); an
-org can set them once as org secrets. To drive many repos from one place without
-repeating secrets, run the App-authenticated workflow from a single "runner" repo
-and set `RENOVATE_REPOSITORIES` to the list (or let it autodiscover).
+> **Secrets on a personal account.** There are no account-wide Actions secrets on a
+> personal account, so the two secrets above live in each repo (the App and key are
+> still created only once). An org can set them once as **org secrets**. To drive
+> many repos from one place without repeating secrets, run the App-authenticated
+> workflow from a single "runner" repo and set `RENOVATE_REPOSITORIES` to the list
+> (or let it autodiscover).
 
 ## Troubleshooting
 
@@ -323,9 +330,11 @@ Check the Dependency Dashboard issue. The most common causes are visible there:
 - Updates under "Rate-Limited" hit `prConcurrentLimit` (10 PRs). Merge or close
   some open Renovate PRs first.
 
-If there's no dashboard issue and no PRs at all, the most likely cause is the repo
-toggle — *Allow GitHub Actions to create and approve pull requests* is off (see
-[Setup](#setup)). Otherwise check the workflow run logs.
+If there's no dashboard issue and no PRs at all, check the workflow run logs. The
+`Validate GitHub App token can access the repo` step fails fast with a clear error
+if the App isn't installed on this repo. (Note: because Renovate authenticates as
+a GitHub App, the *"Allow GitHub Actions to create and approve pull requests"*
+toggle does **not** apply here — that one only gates `GITHUB_TOKEN`.)
 
 ### chisel (or the base images) isn't being updated
 
@@ -366,7 +375,7 @@ token returns no repositories.
 ## See also
 
 - The header of [`.github/workflows/renovate.yml`](../.github/workflows/renovate.yml)
-  explains the workflow's structure and the auth / PR-permission setup inline.
+  explains the workflow's structure and the GitHub App setup inline.
 - [`renovate.json`](../renovate.json) has inline `description` fields on each
   rule — quick context without leaving the file.
 - [Renovate's own documentation](https://docs.renovatebot.com/) is comprehensive;
