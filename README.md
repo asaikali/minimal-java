@@ -55,13 +55,14 @@ See **[Resources](#resources)** below for talks that go deep on chisel and AOT.
 
 ```bash
 ./build-image.sh        # build ubuntu/jre/app/aot multi-arch + print the size comparison
-./run-image.sh          # run minimal-java:aot -> http://localhost:8080
+./run-aot.sh            # run minimal-java:aot -> http://localhost:8080
 curl localhost:8080     # {"author":"...","id":N,"quote":"..."}
 ```
 
 Each part of the workflow is also its own script, runnable on its own:
 
 ```bash
+./run-app.sh                              # run the app image (no AOT) instead of aot
 ./compare-image-sizes.sh                  # re-print the size comparison (no rebuild)
 ./compare-startup-times.sh                # compare startup time: app vs aot
 ./push-image.sh ghcr.io/you/minimal-java  # publish the built series to a registry
