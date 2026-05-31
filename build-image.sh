@@ -38,7 +38,10 @@ if ! docker buildx inspect "${BUILDER}" >/dev/null 2>&1; then
 fi
 
 # Build one Dockerfile target multi-arch and load it into the local Docker store
-# as minimal-java:<target>.
+# as minimal-java:<target>. --sbom/--provenance attach a Software Bill of
+# Materials and SLSA build provenance to each image; they travel with it when
+# pushed, where `docker buildx imagetools inspect <registry-ref>` can show them
+# (attestations aren't inspectable on a local-only image).
 build() {
   local target="$1"
   echo
@@ -46,6 +49,7 @@ build() {
   docker buildx build \
     --builder "${BUILDER}" \
     --platform linux/amd64,linux/arm64 \
+    --sbom=true --provenance=mode=max \
     --target "${target}" --tag "minimal-java:${target}" --load .
 }
 

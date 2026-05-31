@@ -18,6 +18,8 @@ focused technique, so you can see what each step costs and what it contributes.
 - **~3.6× faster startup** — ~1.8 s → ~0.5 s via a JDK 25 AOT cache.
 - **Multi-arch** — `linux/amd64` + `linux/arm64` from one command.
 - **Reproducible & self-contained** — in-container build, pinned versions.
+- **Supply-chain ready** — every image carries an SBOM + SLSA build provenance
+  attestation (inspect with `docker buildx imagetools inspect` once pushed).
 
 ## The image series
 
