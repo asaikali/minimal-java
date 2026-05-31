@@ -61,42 +61,194 @@ chiseled `ubuntu`/`jre` layers).
 
 See **[Resources](#resources)** below for talks that go deep on chisel and AOT.
 
-## Quick start
+## Tutorial
 
-The helper scripts live in [`scripts/`](scripts) — run them by path from the repo
-root (no extra tooling required; if you use [mise](https://mise.jdx.dev) it adds
-`scripts/` to your `PATH` after `mise trust`, so you can drop the `./scripts/`).
+This is a hands-on walkthrough: run each command, look at what it prints, and see
+the size / startup / CVE story build up one step at a time. Every block below is
+**real output** captured from this repo — your numbers will be close.
+
+The helper scripts live in [`scripts/`](scripts). The tutorial runs them by path
+from the repo root, so no extra tooling is required; if you use
+[mise](https://mise.jdx.dev) it adds `scripts/` to your `PATH` after `mise trust`,
+letting you drop the `./scripts/` prefix.
+
+**Before you start** you need Docker with the **containerd image store** enabled
+(Docker Desktop: *Settings → General → "Use containerd for pulling and storing
+images"*). It's what lets a multi-arch image load into your local store; the
+legacy store can't hold one. The CVE step also wants `trivy` and `jq`
+(`brew install trivy jq`), and the Kubernetes step wants `kubectl` pointed at
+Docker Desktop's cluster — both optional, only for their steps.
+
+### Step 1 — Build the image series
+
+Build all five images (the four chiseled targets plus the `fat` baseline),
+multi-arch for `linux/amd64` + `linux/arm64`:
 
 ```bash
-./scripts/build-images.sh   # build ubuntu/jre/app/aot multi-arch + print the size comparison
-./scripts/run-aot.sh        # run minimal-java:aot -> http://localhost:8080
-curl localhost:8080         # {"author":"...","id":N,"quote":"..."}
+./scripts/build-images.sh
 ```
 
-Each part of the workflow is also its own script, runnable on its own:
+The first run creates an on-demand `chisel-builder` buildx builder, then builds
+each Dockerfile target smallest-first (`ubuntu` → `jre` → `app` → `aot` → `fat`).
+You'll see BuildKit progress for each, and because the build is multi-arch, the
+`jre` trim step runs *emulated* for the non-native arch — so that one is
+noticeably slower on its first build. When it finishes it prints the size table
+(the same one [`image-sizes.sh`](scripts/image-sizes.sh) shows on its own):
+
+```
+Size comparison (image size, decimal MB):
+
+  image                            amd64       arm64
+  ubuntu:26.04 (full)            41.6 MB     40.7 MB
+  minimal-java:ubuntu             2.5 MB      1.7 MB
+  minimal-java:jre               65.4 MB     63.5 MB
+  minimal-java:fat (naive)      170.2 MB    168.3 MB
+  minimal-java:app              118.7 MB    116.7 MB
+  minimal-java:aot              145.6 MB    143.6 MB
+```
+
+Read it top-down: full Ubuntu is **~42 MB**, but the chiseled `minimal-java:ubuntu`
+base is **~2.5 MB** — same real Ubuntu bits, only the slices we asked for. Adding a
+trimmed JRE gets you to `jre`, and the whole Spring Boot app (`app`) lands at
+**~119 MB** — **smaller than the naive `fat` baseline (~170 MB)**, which carries the
+full JRE *and* the unexploded fat jar. `aot` is larger than `app` by design: it
+pays ~27 MB for the AOT cache to buy the startup win you'll measure in Step 4.
+
+### Step 2 — Run it and call the API
+
+Start the `app` image in the foreground (Ctrl-C stops it; the container removes
+itself on exit):
 
 ```bash
-./scripts/run-app.sh        # run the app image (no AOT) instead of aot
-./scripts/image-sizes.sh    # re-print the size comparison (no rebuild)
-./scripts/startup-times.sh  # compare startup time: app vs aot
-./scripts/cve-counts.sh     # compare CVE counts across the series (Trivy)
-./scripts/push-images.sh    # publish the built series to ghcr (repo derived from the git remote)
-./scripts/clean.sh          # remove the built images, their containers, and the buildx builder
+./scripts/run-app.sh
 ```
 
-## Kubernetes
+In another terminal, call the one endpoint a few times — it returns a random
+quote, so the rows change:
+
+```bash
+$ curl localhost:8080
+{"author":"Lord Herbert","id":5,"quote":"The shortest answer is doing"}
+$ curl localhost:8080
+{"author":"Vincent Lombardi","id":4,"quote":"Success demands singleness of purpose"}
+```
+
+That's a full Spring Boot 4 + JPA/Hibernate + Flyway + H2 service answering from a
+**2.5 MB chiseled base** with **no shell and no package manager** inside. And
+`run-app.sh` already runs it the way you'd want in production — you can confirm
+the hardening on the running container:
+
+```bash
+$ docker inspect -f 'User={{.Config.User}} ReadonlyRootfs={{.HostConfig.ReadonlyRootfs}} CapDrop={{.HostConfig.CapDrop}}' minimal-java-app
+User=10001:10001 ReadonlyRootfs=true CapDrop=[ALL]
+```
+
+Non-root UID, read-only root filesystem, every Linux capability dropped. Swap in
+[`./scripts/run-aot.sh`](scripts/run-aot.sh) to run the fast-startup `aot` image
+instead — same API, same hardening.
+
+### Step 3 — Compare the sizes again
+
+You already saw the table at the end of the build; re-print it any time without
+rebuilding:
+
+```bash
+./scripts/image-sizes.sh
+```
+
+This reads each image's content size straight from `docker image inspect`, per
+architecture — so it's a stable, reproducible number, not a parse of formatted
+output.
+
+### Step 4 — Compare startup time
+
+Boot the `fat`, `app`, and `aot` images in turn and print Spring Boot's own
+"Started" line for each:
+
+```bash
+./scripts/startup-times.sh
+```
+
+```
+=== startup ===
+fat: ... Started Application in 1.955 seconds (process running for 2.221)
+app: ... Started Application in 1.689 seconds (process running for 1.84)
+aot: ... Started Application in 0.538 seconds (process running for 0.705)
+```
+
+Two techniques, two jumps. `fat → app` exploding the fat jar into layers drops
+the nested-jar classloader overhead. `app → aot` the JDK 25 AOT cache replays the
+class loading/linking recorded during the build-time training run — taking
+startup from **~1.7 s to ~0.5 s, about 3.6× faster than the `fat` baseline**.
+(See [Project Leyden & AOT](#project-leyden--aot-the-aot-image) for how the cache
+is built.)
+
+### Step 5 — Compare CVE counts
+
+Scan every image with [Trivy](https://trivy.dev) and print a per-severity recap
+(needs `trivy` and `jq`):
+
+```bash
+./scripts/cve-counts.sh
+```
+
+```
+=== CVE summary (Trivy — counts per severity) ===
+  image                         C    H    M    L
+  ubuntu:26.04                  0    8   56    3
+  minimal-java:ubuntu           0    0    0    0
+  minimal-java:jre              0    0    0    0
+  minimal-java:fat              3   11   62    4
+  minimal-java:app              3    3    0    1
+  minimal-java:aot              3    3    0    1
+```
+
+This is the security half of the story. Full `ubuntu:26.04` carries dozens of OS
+findings; the chiseled `minimal-java:ubuntu` and `jre` images report **zero** —
+the OS attack surface is gone because those packages simply aren't in the image.
+The naive `fat` baseline inherits the full JRE's OS packages on top of the app's
+jars (62 medium findings alone). The `app`/`aot` images keep the OS at zero; their
+remaining findings live in the **Java dependencies** (the application jars), not
+the base — exactly what you'd then triage by updating dependencies.
+
+### Step 6 — Deploy to Kubernetes (optional)
 
 [`k8s/deployment.yaml`](k8s/deployment.yaml) runs `minimal-java:aot` on Docker
-Desktop's Kubernetes, carrying the same hardening `run-aot.sh` uses (non-root,
-read-only root filesystem, all capabilities dropped, `httpGet` probes since the
-image has no shell). It uses the locally-built image (`imagePullPolicy:
-IfNotPresent`) and a NodePort:
+Desktop's Kubernetes, carrying the same hardening as Step 2 (non-root, read-only
+root filesystem, all capabilities dropped) plus `httpGet` probes — there's no
+shell in the image to run an exec health check. It uses the image you built
+locally (`imagePullPolicy: IfNotPresent`, no registry needed) and exposes it on a
+NodePort:
 
 ```bash
-./scripts/build-images.sh             # build the image first
 kubectl apply -f k8s/deployment.yaml
-curl localhost:30080                  # -> a random quote
+curl localhost:30080                  # -> a random quote, same as Step 2
 kubectl delete -f k8s/deployment.yaml
+```
+
+### Step 7 — Publish + inspect supply-chain attestations (optional)
+
+The build attached an SBOM and SLSA build provenance to each image. Those travel
+with the image in a registry (they aren't visible on a local-only image), so push
+first, then inspect:
+
+```bash
+docker login ghcr.io                  # or: gh auth token | docker login ghcr.io -u <you> --password-stdin
+./scripts/push-images.sh              # retag + push the series -> ghcr.io/<owner>/<repo>
+./scripts/inspect-attestations.sh     # show each image's SBOM + provenance manifests
+```
+
+With no argument both scripts derive `ghcr.io/<owner>/<repo>` from this repo's
+git remote; pass a repo to override.
+
+### Clean up
+
+Remove everything the tutorial created locally — the `minimal-java:*` images, any
+containers they left behind, and the `chisel-builder` builder (upstream base
+images and anything you pushed are left alone):
+
+```bash
+./scripts/clean.sh
 ```
 
 ## Resources
