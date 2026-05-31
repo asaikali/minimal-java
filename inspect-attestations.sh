@@ -4,9 +4,12 @@
 # each image. Attestations travel with the image in a registry, so inspect a
 # copy pushed by ./push-image.sh (they aren't visible on a local-only image):
 #
-#   ./build-image.sh                            # build (attaches the attestations)
-#   ./push-image.sh ghcr.io/you/minimal-java    # push them to the registry
-#   ./inspect-attestations.sh ghcr.io/you/minimal-java
+#   ./build-image.sh            # build (attaches the attestations)
+#   ./push-image.sh             # push them to the registry
+#   ./inspect-attestations.sh   # inspect them there
+#
+# With no argument the repo defaults to ghcr.io/<owner>/<repo> derived from this
+# repo's GitHub remote (same default as push-image.sh); pass a value to override.
 #
 # For each tag this prints `docker buildx imagetools inspect`, whose manifest
 # list shows the per-platform images alongside their attestation manifests
@@ -17,16 +20,24 @@
 #   docker buildx imagetools inspect <ref> --format '{{ json .SBOM }}'
 #
 # Usage:
-#   ./inspect-attestations.sh <registry-repo>
+#   ./inspect-attestations.sh [registry-repo]
 #
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
+# Registry repo to inspect. Defaults to ghcr.io/<owner>/<repo> derived from this
+# repo's GitHub remote; an explicit argument overrides it.
 DEST="${1:-}"
-
 if [[ -z "${DEST}" ]]; then
-  echo "usage: ./inspect-attestations.sh <registry-repo>" >&2
+  url="$(git config --get remote.origin.url 2>/dev/null || true)"
+  if [[ "${url}" == *github.com* ]]; then
+    DEST="ghcr.io/$(printf '%s' "${url}" | sed -E 's#^.*github\.com[:/]##; s#\.git$##' | tr '[:upper:]' '[:lower:]')"
+  fi
+fi
+if [[ -z "${DEST}" ]]; then
+  echo "usage: ./inspect-attestations.sh [registry-repo]" >&2
+  echo "  with no arg, defaults to ghcr.io/<owner>/<repo> from the GitHub remote" >&2
   echo "  e.g. ./inspect-attestations.sh ghcr.io/you/minimal-java" >&2
   exit 1
 fi
