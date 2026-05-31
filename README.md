@@ -55,9 +55,9 @@ Under the hood, each image is a named stage in a single multi-stage `Dockerfile`
 multi-arch for `linux/amd64` + `linux/arm64`. The **Size** column is what
 `image-sizes.sh` prints; the **Startup** column is what
 `startup-times.sh` reports (Spring Boot's own startup time) — both
-reproducible on your own machine. `cve-counts-trivy.sh` (and the
-`-scout.sh` variant) do the same for the security story, counting CVEs per image
-(the OS attack surface drops to zero at the chiseled `ubuntu`/`jre` layers).
+reproducible on your own machine. `cve-counts.sh` does the same for the security
+story, counting CVEs per image (the OS attack surface drops to zero at the
+chiseled `ubuntu`/`jre` layers).
 
 See **[Resources](#resources)** below for talks that go deep on chisel and AOT.
 
@@ -75,8 +75,7 @@ Each part of the workflow is also its own script, runnable on its own:
 ./run-app.sh                              # run the app image (no AOT) instead of aot
 ./image-sizes.sh                          # re-print the size comparison (no rebuild)
 ./startup-times.sh                        # compare startup time: app vs aot
-./cve-counts-trivy.sh                     # compare CVE counts (Trivy — local DB, fast)
-./cve-counts-scout.sh                     # compare CVE counts (Docker Scout — no install)
+./cve-counts.sh                           # compare CVE counts across the series (Trivy)
 ./push-image.sh ghcr.io/you/minimal-java  # publish the built series to a registry
 ```
 
