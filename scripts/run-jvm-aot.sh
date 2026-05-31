@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# Run the spring-aot image (JDK AOT cache + Spring AOT — the fastest-startup
+# Run the jvm-aot image (JDK 25 / Project Leyden AOT cache — the fast-startup
 # showcase) built by build-images.sh, publishing its HTTP port. Foreground;
 # Ctrl-C stops it and the container is removed on exit.
 #
-#   run-spring-aot.sh   # docker run minimal-java:spring-aot -> http://localhost:8080
+#   run-jvm-aot.sh   # docker run minimal-java:jvm-aot -> http://localhost:8080
 #
-# Runs hardened, same as run-jvm-aot.sh (the image already builds non-root and
-# shell-less):
+# Runs hardened, to show the secure-runtime half of the story (the image already
+# builds non-root and shell-less):
 #   --read-only                        no writes to the root filesystem
 #   --tmpfs /tmp                        ...except an in-memory /tmp, which the JVM
 #                                       and embedded Tomcat need for scratch files
@@ -19,11 +19,11 @@
 #
 set -euo pipefail
 
-echo "Running minimal-java:spring-aot -> http://localhost:8080/  (Ctrl-C to stop)"
-exec docker run --rm --name minimal-java-spring-aot \
+echo "Running minimal-java:jvm-aot -> http://localhost:8080/  (Ctrl-C to stop)"
+exec docker run --rm --name minimal-java-jvm-aot \
   --read-only \
   --tmpfs /tmp \
   --cap-drop ALL \
   --security-opt no-new-privileges \
   -p 8080:8080 \
-  minimal-java:spring-aot
+  minimal-java:jvm-aot

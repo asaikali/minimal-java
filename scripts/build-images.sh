@@ -3,10 +3,11 @@
 # Build the series of chiseled-Ubuntu images defined in ./Dockerfile, one per
 # Dockerfile target, each progressively richer:
 #
-#   ubuntu — chiseled Ubuntu (base-files + libc6) only
-#   jre    — chiseled ubuntu + a trimmed Eclipse Temurin JRE 25
-#   app    — jre + the Spring Boot app, exploded into Spring Boot layers
-#   aot    — jre + the app layout + a JDK 25 AOT cache, for faster startup
+#   ubuntu    — chiseled Ubuntu (base-files + libc6) only
+#   jre       — chiseled ubuntu + a trimmed Eclipse Temurin JRE 25
+#   app       — jre + the Spring Boot app, exploded into Spring Boot layers
+#   jvm-aot   — jre + the app layout + a JDK 25 AOT cache, for faster startup
+#   spring-aot — jvm-aot + Spring AOT, for the fastest startup
 #
 # Each is built multi-arch (linux/amd64 + linux/arm64) so it runs on both
 # Apple Silicon Macs and amd64 Linux, and tagged minimal-java:<target>.
@@ -16,7 +17,7 @@
 # image store (Docker Desktop: Settings > General > "Use containerd for pulling
 # and storing images"); the legacy image store can't hold one.
 #
-#   build-images.sh    # build minimal-java:{ubuntu,jre,app,aot}
+#   build-images.sh    # build minimal-java:{ubuntu,jre,app,jvm-aot,spring-aot}
 #
 # To publish the built series to a registry, build first, then push-images.sh.
 #
@@ -59,11 +60,11 @@ build() {
 build ubuntu
 build jre
 build app
-build aot
+build jvm-aot
 
-# spring-aot: the next rung past aot — the JDK AOT cache PLUS Spring AOT. Its
+# spring-aot: the next rung past jvm-aot — the JDK AOT cache PLUS Spring AOT. Its
 # build runs Spring's process-aot (the -Pspringaot Maven profile) before the
-# training run, so its build step is a little slower than aot's.
+# training run, so its build step is a little slower than jvm-aot's.
 build spring-aot
 
 # The naive baseline, for the comparison scripts: the fat jar on the full

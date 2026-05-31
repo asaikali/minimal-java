@@ -2,10 +2,11 @@
 #
 # Simple startup comparison for the images built by build-images.sh: run the
 # fat-jar baseline (no techniques), then the app image (extracted layers, no
-# AOT), then the aot image (AOT cache), showing each container's full startup
-# log. At the end it prints Spring Boot's own "Started ... in N seconds" line
-# for all three together — the startup story (fat jar -> extracted -> AOT cache)
-# behind the README's "~3.6x faster startup" claim.
+# AOT), then the jvm-aot image (JDK AOT cache), then the spring-aot image
+# (JDK AOT cache + Spring AOT), showing each container's full startup log. At the
+# end it prints Spring Boot's own "Started ... in N seconds" line for all four
+# together — the startup story (fat jar -> extracted -> JDK AOT cache -> + Spring
+# AOT) behind the README's "~4.8x faster startup" claim.
 #
 #   build-images.sh             # build the images first
 #   startup-times.sh
@@ -17,7 +18,7 @@ cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 PORT=18080
 summary=""
 
-# Bold the app:/aot: labels in the final summary, but only when writing to a
+# Bold the app:/jvm-aot:/spring-aot: labels in the final summary, but only when writing to a
 # terminal so piped output stays free of escape codes.
 if [[ -t 1 ]]; then bold=$'\e[1m'; reset=$'\e[0m'; else bold=""; reset=""; fi
 
@@ -40,7 +41,7 @@ boot() {
 
 boot fat
 boot app
-boot aot
+boot jvm-aot
 boot spring-aot
 
 echo "=== startup ==="

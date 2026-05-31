@@ -12,7 +12,7 @@
 # ghcr.io/<owner>/<repo> derived from this repo's GitHub remote; pass a value to
 # override (e.g. ghcr.io/you/minimal-java).
 #
-#   build-images.sh      # build minimal-java:{ubuntu,jre,app,aot}
+#   build-images.sh      # build minimal-java:{ubuntu,jre,app,jvm-aot,spring-aot}
 #   docker login ghcr.io  # or: gh auth token | docker login ghcr.io -u <you> --password-stdin
 #   push-images.sh       # retag + push each -> ghcr.io/<owner>/<repo>
 #
@@ -40,7 +40,7 @@ if [[ -z "${DEST}" ]]; then
 fi
 
 # Same series as build-images.sh, smallest first.
-TARGETS=(ubuntu jre app aot spring-aot)
+TARGETS=(ubuntu jre app jvm-aot spring-aot)
 
 echo "Pushing minimal-java:* -> ${DEST}:*"
 

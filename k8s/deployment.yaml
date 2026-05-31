@@ -1,4 +1,4 @@
-# Sample deployment of the chiseled minimal-java:aot image on Docker Desktop's
+# Sample deployment of the chiseled minimal-java:jvm-aot image on Docker Desktop's
 # Kubernetes. Assumes kubectl points at the docker-desktop cluster and the image
 # was built locally (./scripts/build-images.sh) — Docker Desktop shares its
 # containerd image store with Kubernetes, so imagePullPolicy: IfNotPresent finds
@@ -9,13 +9,13 @@
 #   curl localhost:30080                  # -> a random quote
 #   kubectl delete -f k8s/deployment.yaml
 #
-# The securityContext mirrors what run-aot.sh demonstrates with `docker run`:
+# The securityContext mirrors what run-jvm-aot.sh demonstrates with `docker run`:
 # non-root (the image's 10001:10001), a read-only root filesystem, all Linux
 # capabilities dropped, and no privilege escalation. A read-only rootfs still
 # needs a writable /tmp for the JVM/Tomcat scratch files, provided here by an
 # emptyDir (add `medium: Memory` to mirror docker's in-memory --tmpfs). There is
 # no shell in the image to run an exec health check, so the probes use httpGet —
-# the same reason run-aot.sh notes for not using a Docker HEALTHCHECK.
+# the same reason run-jvm-aot.sh notes for not using a Docker HEALTHCHECK.
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -43,11 +43,11 @@ spec:
           type: RuntimeDefault    # apply the container runtime's default syscall allowlist
       containers:
         - name: app
-          image: minimal-java:aot
+          image: minimal-java:jvm-aot
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
-          # Container-level hardening — the same guarantees run-aot.sh sets with
+          # Container-level hardening — the same guarantees run-jvm-aot.sh sets with
           # docker run flags.
           securityContext:
             allowPrivilegeEscalation: false   # block gaining more privileges than the parent (e.g. via setuid)

@@ -43,7 +43,7 @@ if [[ -z "${DEST}" ]]; then
 fi
 
 # Same series push-images.sh publishes (the naive fat baseline isn't published).
-TARGETS=(ubuntu jre app aot spring-aot)
+TARGETS=(ubuntu jre app jvm-aot spring-aot)
 
 # Bold the ">>> <ref>" headers on a terminal; plain when piped.
 if [[ -t 1 ]]; then bold=$'\e[1m'; reset=$'\e[0m'; else bold=""; reset=""; fi

@@ -113,7 +113,7 @@ RUN --mount=type=cache,target=/root/.m2 \
 # Image: fat — the naive baseline, shown only for comparison: the Spring Boot
 # fat jar on the FULL official Temurin JRE, with none of the techniques the
 # series applies (no chisel, no layered extract, no AOT, runs as root). This is
-# the image most people write by hand; app/aot below show how much smaller,
+# the image most people write by hand; app/jvm-aot below show how much smaller,
 # safer, and faster the chiseled series gets from here. It runs the fat jar
 # directly (nested-jar classloader), so its startup is the slowest of the set.
 # ---------------------------------------------------------------------------
@@ -127,8 +127,8 @@ ENTRYPOINT ["java", "-jar", "application.jar"]
 # Image: app — jre + the exploded app, one COPY per layer. Ordered slowest-
 # changing first (dependencies) to fastest (application) so a code change only
 # busts the small final layer and reuses the cached dependency layers.
-# app and aot are siblings on jre: two packagings of the same app (see aot for
-# the faster-startup variant).
+# app, jvm-aot, and spring-aot are siblings on jre: packagings of the same app
+# (see jvm-aot and spring-aot for the faster-startup variants).
 # ---------------------------------------------------------------------------
 FROM jre AS app
 WORKDIR /app
@@ -143,7 +143,7 @@ USER 10001:10001
 ENTRYPOINT ["java", "-jar", "application.jar"]
 
 # ---------------------------------------------------------------------------
-# Image: aot — a sibling of app on jre: the same exploded app PLUS a JDK AOT
+# Image: jvm-aot — a sibling of app on jre: the same exploded app PLUS a JDK AOT
 # cache, trading a larger image for faster startup. A build-time "training run"
 # starts the app, lets Spring refresh the context, then exits
 # (-Dspring.context.exit=onRefresh), recording loaded classes into app.aot
@@ -156,7 +156,7 @@ ENTRYPOINT ["java", "-jar", "application.jar"]
 # team): "Supercharge your JVM performance with Project Leyden and Spring Boot"
 # by Moritz Halbritter, 2026-02-10 — https://www.youtube.com/watch?v=UqaSWiE076w
 # ---------------------------------------------------------------------------
-FROM jre AS aot
+FROM jre AS jvm-aot
 WORKDIR /app
 COPY --from=build /build/extracted/dependencies/ ./
 COPY --from=build /build/extracted/spring-boot-loader/ ./
@@ -168,13 +168,13 @@ USER 10001:10001
 ENTRYPOINT ["java", "-XX:AOTCache=app.aot", "-jar", "application.jar"]
 
 # ---------------------------------------------------------------------------
-# Image: spring-aot — the next rung past aot: the same JDK AOT cache PLUS Spring
+# Image: spring-aot — the next rung past jvm-aot: the same JDK AOT cache PLUS Spring
 # AOT. It uses the Spring-AOT-processed app from the build-springaot stage and
 # adds -Dspring.aot.enabled=true to BOTH the training run and the runtime, so the
 # two techniques stack: Spring AOT replaces reflective bean wiring with generated
 # code (the bean arrangement is frozen at build time), and the JDK AOT cache
 # replays class loading/linking. The training run uses -Dspring.context.exit=
-# onRefresh + -XX:AOTCacheOutput; runtime loads it via -XX:AOTCache. Like aot,
+# onRefresh + -XX:AOTCacheOutput; runtime loads it via -XX:AOTCache. Like jvm-aot,
 # the training RUN runs as root to write app.aot, then USER drops to non-root.
 #
 # See the README "Project Leyden & AOT" section for how Spring AOT differs from
