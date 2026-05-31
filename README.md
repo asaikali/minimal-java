@@ -42,9 +42,9 @@ scratch
 | Image                 | Builds on | Adds (the technique)                                                       | Size (amd64) | Startup |
 | --------------------- | --------- | -------------------------------------------------------------------------- | ------------ | ------- |
 | `ubuntu:26.04` (full) | —         | the whole distro, for reference                                            | ~42 MB       | —       |
-| `minimal-java:fat`    | full JRE  | **naive baseline** — fat jar on the full Temurin JRE, no techniques        | ~170 MB      | ~2.2 s  |
 | `minimal-java:ubuntu` | `scratch` | Canonical **chisel** — built bottom-up from package *slices* (no shell/apt) | ~2.5 MB     | —       |
 | `minimal-java:jre`    | `:ubuntu` | **trimmed Temurin JRE 25** — standalone launchers removed                  | ~65 MB       | —       |
+| `minimal-java:fat`    | full JRE  | **naive baseline** — fat jar on the full Temurin JRE, no techniques        | ~170 MB      | ~2.2 s  |
 | `minimal-java:app`    | `:jre`    | Spring Boot **layered jar**, exploded into cache-friendly layers           | ~119 MB      | ~1.8 s  |
 | `minimal-java:aot`    | `:jre`    | the app layout **plus** a **JDK 25 AOT cache** (Project Leyden)            | ~146 MB      | ~0.5 s  |
 
