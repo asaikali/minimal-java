@@ -16,9 +16,6 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# Same series order as build-image.sh, smallest first.
-TARGETS=(ubuntu jre app aot)
-
 # The full Ubuntu base to compare against. Read from the Dockerfile ARG (a plain
 # docker pull below, outside any build, so it can't see the ARG itself).
 UBUNTU_VERSION="$(sed -n 's/^ARG UBUNTU_VERSION=//p' Dockerfile)"
@@ -28,11 +25,16 @@ UBUNTU_VERSION="$(sed -n 's/^ARG UBUNTU_VERSION=//p' Dockerfile)"
 docker pull --quiet --platform linux/amd64 "ubuntu:${UBUNTU_VERSION}" >/dev/null
 docker pull --quiet --platform linux/arm64 "ubuntu:${UBUNTU_VERSION}" >/dev/null
 
+# Full ubuntu baseline first, then the chiseled series smallest -> largest.
+# --tree prints per-architecture sizes in MB (no manual formatting needed).
 echo "Size comparison (ubuntu base -> chiseled series):"
 echo
-# --tree prints per-architecture sizes in MB (no manual formatting needed).
 docker image ls --tree "ubuntu:${UBUNTU_VERSION}"
-for target in "${TARGETS[@]}"; do
-  echo
-  docker image ls --tree "minimal-java:${target}"
-done
+echo
+docker image ls --tree "minimal-java:ubuntu"
+echo
+docker image ls --tree "minimal-java:jre"
+echo
+docker image ls --tree "minimal-java:app"
+echo
+docker image ls --tree "minimal-java:aot"
