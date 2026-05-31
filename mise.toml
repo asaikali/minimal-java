@@ -1,0 +1,6 @@
+# mise (https://mise.jdx.dev) project config. Adds ./scripts to PATH when mise is
+# active in this repo, so the helper scripts run as bare commands from anywhere
+# in the tree (e.g. `build-image.sh` instead of `./scripts/build-image.sh`). Run
+# `mise trust` once to allow this config.
+[env]
+_.path = ["scripts"]

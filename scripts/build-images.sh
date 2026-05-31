@@ -16,9 +16,9 @@
 # image store (Docker Desktop: Settings > General > "Use containerd for pulling
 # and storing images"); the legacy image store can't hold one.
 #
-#   ./build-image.sh    # build minimal-java:{ubuntu,jre,app,aot}
+#   build-images.sh    # build minimal-java:{ubuntu,jre,app,aot}
 #
-# To publish the built series to a registry, build first, then ./push-image.sh.
+# To publish the built series to a registry, build first, then push-images.sh.
 #
 # Image versions (Ubuntu, JRE, chisel) are NOT set here — they live in the
 # Dockerfile's ARG lines, the single source of truth. To change one, edit the
@@ -26,7 +26,7 @@
 #
 set -euo pipefail
 
-cd "$(dirname "$0")"
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
 BUILDER="chisel-builder"
 
@@ -69,4 +69,4 @@ build fat
 # Delegated to image-sizes.sh, which is also runnable on its own to
 # re-check sizes later.
 echo
-./image-sizes.sh
+"$(dirname "$0")/image-sizes.sh"

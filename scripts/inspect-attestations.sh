@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 #
-# Show the SBOM + SLSA provenance attestations that build-image.sh attached to
+# Show the SBOM + SLSA provenance attestations that build-images.sh attached to
 # each image. Attestations travel with the image in a registry, so inspect a
-# copy pushed by ./push-image.sh (they aren't visible on a local-only image):
+# copy pushed by push-images.sh (they aren't visible on a local-only image):
 #
-#   ./build-image.sh            # build (attaches the attestations)
-#   ./push-image.sh             # push them to the registry
-#   ./inspect-attestations.sh   # inspect them there
+#   build-images.sh            # build (attaches the attestations)
+#   push-images.sh             # push them to the registry
+#   inspect-attestations.sh   # inspect them there
 #
 # With no argument the repo defaults to ghcr.io/<owner>/<repo> derived from this
-# repo's GitHub remote (same default as push-image.sh); pass a value to override.
+# repo's GitHub remote (same default as push-images.sh); pass a value to override.
 #
 # For each tag this prints `docker buildx imagetools inspect`, whose manifest
 # list shows the per-platform images alongside their attestation manifests
@@ -20,11 +20,11 @@
 #   docker buildx imagetools inspect <ref> --format '{{ json .SBOM }}'
 #
 # Usage:
-#   ./inspect-attestations.sh [registry-repo]
+#   inspect-attestations.sh [registry-repo]
 #
 set -euo pipefail
 
-cd "$(dirname "$0")"
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
 # Registry repo to inspect. Defaults to ghcr.io/<owner>/<repo> derived from this
 # repo's GitHub remote; an explicit argument overrides it.
@@ -36,13 +36,13 @@ if [[ -z "${DEST}" ]]; then
   fi
 fi
 if [[ -z "${DEST}" ]]; then
-  echo "usage: ./inspect-attestations.sh [registry-repo]" >&2
+  echo "usage: inspect-attestations.sh [registry-repo]" >&2
   echo "  with no arg, defaults to ghcr.io/<owner>/<repo> from the GitHub remote" >&2
-  echo "  e.g. ./inspect-attestations.sh ghcr.io/you/minimal-java" >&2
+  echo "  e.g. inspect-attestations.sh ghcr.io/you/minimal-java" >&2
   exit 1
 fi
 
-# Same series push-image.sh publishes (the naive fat baseline isn't published).
+# Same series push-images.sh publishes (the naive fat baseline isn't published).
 TARGETS=(ubuntu jre app aot)
 
 # Bold the ">>> <ref>" headers on a terminal; plain when piped.

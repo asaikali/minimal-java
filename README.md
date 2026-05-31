@@ -23,7 +23,7 @@ focused technique, so you can see what each step costs and what it contributes.
 
 ## The image series
 
-`./build-image.sh` produces five images. `fat` is the naive baseline — the Spring
+`build-images.sh` produces five images. `fat` is the naive baseline — the Spring
 Boot fat jar on the full Temurin JRE, with none of the techniques applied. The
 rest are the chiseled series: `ubuntu` and `jre` build up the runtime in a line,
 then `app` and `aot` are two **sibling** packagings of the same Spring Boot app on
@@ -51,7 +51,7 @@ scratch
 | `minimal-java:aot`    | `:jre`    | the app layout **plus** a **JDK 25 AOT cache** (Project Leyden)            | ~146 MB      | ~0.5 s  |
 
 Under the hood, each image is a named stage in a single multi-stage `Dockerfile`;
-`build-image.sh` builds each one with `docker buildx build --target <name>`,
+`build-images.sh` builds each one with `docker buildx build --target <name>`,
 multi-arch for `linux/amd64` + `linux/arm64`. The **Size** column is what
 `image-sizes.sh` prints; the **Startup** column is what
 `startup-times.sh` reports (Spring Boot's own startup time) — both
@@ -63,20 +63,24 @@ See **[Resources](#resources)** below for talks that go deep on chisel and AOT.
 
 ## Quick start
 
+The helper scripts live in [`scripts/`](scripts), which [mise](https://mise.jdx.dev)
+adds to your `PATH` (run `mise trust` once), so you can call them by name from
+anywhere in the repo. Without mise, run them as `./scripts/<name>`.
+
 ```bash
-./build-image.sh        # build ubuntu/jre/app/aot multi-arch + print the size comparison
-./run-aot.sh            # run minimal-java:aot -> http://localhost:8080
+build-images.sh         # build ubuntu/jre/app/aot multi-arch + print the size comparison
+run-aot.sh              # run minimal-java:aot -> http://localhost:8080
 curl localhost:8080     # {"author":"...","id":N,"quote":"..."}
 ```
 
 Each part of the workflow is also its own script, runnable on its own:
 
 ```bash
-./run-app.sh                              # run the app image (no AOT) instead of aot
-./image-sizes.sh                          # re-print the size comparison (no rebuild)
-./startup-times.sh                        # compare startup time: app vs aot
-./cve-counts.sh                           # compare CVE counts across the series (Trivy)
-./push-image.sh ghcr.io/you/minimal-java  # publish the built series to a registry
+run-app.sh              # run the app image (no AOT) instead of aot
+image-sizes.sh          # re-print the size comparison (no rebuild)
+startup-times.sh        # compare startup time: app vs aot
+cve-counts.sh           # compare CVE counts across the series (Trivy)
+push-images.sh          # publish the built series to ghcr (repo derived from the git remote)
 ```
 
 ## Resources

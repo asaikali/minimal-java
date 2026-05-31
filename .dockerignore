@@ -1,5 +1,11 @@
-# Keep the build context small and reproducible.
+# Keep the build context small and reproducible. The build needs only the
+# Maven project (pom.xml, src, mvnw, .mvn); the helper scripts, docs, and tool
+# config never go into an image, so excluding them also keeps the build cache
+# from busting when they change.
 .git
 target
 .idea
 *.iml
+scripts
+mise.toml
+*.md

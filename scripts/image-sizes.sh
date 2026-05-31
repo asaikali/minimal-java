@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Size comparison for the images built by ./build-image.sh: the full Ubuntu base
+# Size comparison for the images built by build-images.sh: the full Ubuntu base
 # and the naive fat-jar image vs the chiseled series, as a tidy per-architecture
 # table. The security/startup analogues are cve-counts.sh and startup-times.sh.
 #
@@ -10,12 +10,12 @@
 #
 # Run after building (the minimal-java:* images must be local):
 #
-#   ./build-image.sh
-#   ./image-sizes.sh
+#   build-images.sh
+#   image-sizes.sh
 #
 set -euo pipefail
 
-cd "$(dirname "$0")"
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
 UBUNTU_VERSION="$(sed -n 's/^ARG UBUNTU_VERSION=//p' Dockerfile)"
 

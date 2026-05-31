@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 #
-# Simple startup comparison for the images built by ./build-image.sh: run the
+# Simple startup comparison for the images built by build-images.sh: run the
 # fat-jar baseline (no techniques), then the app image (extracted layers, no
 # AOT), then the aot image (AOT cache), showing each container's full startup
 # log. At the end it prints Spring Boot's own "Started ... in N seconds" line
 # for all three together — the startup story (fat jar -> extracted -> AOT cache)
 # behind the README's "~3.6x faster startup" claim.
 #
-#   ./build-image.sh             # build the images first
-#   ./startup-times.sh
+#   build-images.sh             # build the images first
+#   startup-times.sh
 #
 set -euo pipefail
 
-cd "$(dirname "$0")"
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
 PORT=18080
 summary=""
