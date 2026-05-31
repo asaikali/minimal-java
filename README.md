@@ -54,23 +54,6 @@ scratch
 | `minimal-java:jvm-aot`    | `:jre`    | the app layout **plus** a **JDK 25 AOT cache** (Project Leyden)            | ~146 MB      | ~0.5 s  |
 | `minimal-java:spring-aot` | `:jre`    | the `jvm-aot` layout **plus Spring AOT** — generated bean wiring            | ~145 MB      | ~0.4 s  |
 
-> [!NOTE]
-> **JVM AOT vs Spring AOT — two different things that stack.**
-> - **JVM AOT** (the `jvm-aot` image) is a *JVM* feature — the **Project Leyden AOT
->   cache** (JEP 514). A build-time *training run* records class loading + linking
->   (and, on JDK 25, method profiling); the runtime replays it instead of redoing
->   it. It's framework-agnostic and leaves your application code and beans exactly
->   as they are.
-> - **Spring AOT** (the `spring-aot` image) is a *Spring* feature — at build time
->   it generates Java code for the bean wiring, replacing reflection-based context
->   setup, and **freezes the bean arrangement** (no profile/condition changes at
->   runtime).
->
-> They're complementary, so `spring-aot` uses **both**: the JVM AOT cache speeds
-> class loading/linking, and Spring AOT speeds Spring's own startup work — which is
-> why it's the fastest image. See
-> [Project Leyden & AOT](#project-leyden--aot-the-jvm-aot-and-spring-aot-images) for depth.
-
 Under the hood, each image is a named stage in a single multi-stage `Dockerfile`;
 `build-images.sh` builds each one with `docker buildx build --target <name>`,
 multi-arch for `linux/amd64` + `linux/arm64`. The **Size** column is what
@@ -81,6 +64,89 @@ story, counting CVEs per image (the OS attack surface drops to zero at the
 chiseled `ubuntu`/`jre` layers).
 
 See **[Resources](#resources)** below for talks that go deep on chisel and AOT.
+
+## JVM AOT vs Spring AOT
+
+The `jvm-aot` and `spring-aot` images both cut startup, but with two **different**
+techniques that stack — and Spring AOT carries a trade-off worth understanding
+before you reach for it.
+
+- **JVM AOT** (`jvm-aot`) is a **JVM** feature: the Project Leyden **AOT cache**
+  (JEP 514). A build-time *training run* records class loading + linking (and, on
+  JDK 25, method profiling), and the runtime replays it instead of redoing the work
+  on every boot. It's framework-agnostic and leaves your application code and bean
+  graph exactly as they are — **nothing about your app is frozen.**
+- **Spring AOT** (`spring-aot`) is a **Spring** feature: at build time it generates
+  Java code for the bean wiring (replacing reflection-based context setup) and
+  **freezes the bean arrangement** — *which beans exist and how they're wired is
+  decided at build time and cannot change at runtime.*
+
+`spring-aot` uses **both**, applied in this order — which is why it's the fastest
+image:
+
+1. **Spring AOT runs first**, at the Maven build (`-Pspringaot` → `process-aot`),
+   baking the generated bean-wiring code into the jar.
+2. **Then the JVM AOT cache training run** boots that *already-Spring-AOT-processed*
+   app (`-Dspring.aot.enabled=true -Dspring.context.exit=onRefresh`) and records its
+   class loading/linking into `app.aot`.
+3. **At runtime** the JVM replays `app.aot` *and* Spring uses the generated wiring.
+
+Because the training run observes the Spring-AOT-optimized startup, the Leyden cache
+captures *that* leaner path — so the two compound rather than just coexist. (The
+`jvm-aot` image is the same minus step 1: no Spring AOT, so its training run records
+the ordinary reflection-based startup.)
+
+But that frozen bean arrangement is the catch. The line to keep in mind:
+
+| Decided at **build time** — frozen by Spring AOT | Still resolved at **runtime** |
+| --- | --- |
+| *Which beans exist / how they're wired* — `@Profile`, `@ConditionalOnProperty`, autoconfiguration conditions | *Config values* — `application.yml`, `application-{profile}.yml`, env vars, `@Value`, `@ConfigurationProperties` |
+
+### A concrete example
+
+Say a `SignupService` sends email, wired differently per environment — a stub in
+dev/test so you never send real mail, the real client in prod:
+
+```java
+@Profile("!prod")   // dev, test, CI
+@Bean EmailSender loggingEmailSender() { return new LoggingEmailSender(); }   // just logs
+
+@Profile("prod")
+@Bean EmailSender sesEmailSender()     { return new SesEmailSender(...); }    // real AWS SES
+```
+
+**With `jvm-aot` (or no AOT):** you ship one image and pick the bean at startup with
+`--spring.profiles.active=prod`. The Leyden cache never touches this — profiles stay
+fully dynamic.
+
+**With `spring-aot`:** `process-aot` evaluates `@Profile` at **build time**. If the
+build ran with the default profile, the generated context contains *only*
+`loggingEmailSender`; `sesEmailSender` was never generated. Run that image in prod
+and either it fails at startup (no prod `EmailSender`) or — worse — **the logging
+stub silently "sends" production email to a log file.** Activating `prod` at runtime
+can't fix it: the bean simply doesn't exist. The same goes for any conditional bean —
+a prod-only Redis cache or metrics exporter, or anything behind
+`@ConditionalOnProperty(...enabled)` — the decision is made once, at build time.
+
+Note what *still* works: because property values aren't frozen, changing
+`spring.datasource.url` to point `jvm-aot`/`spring-aot` at Postgres vs MySQL is fine
+under AOT — the `DataSource` bean exists either way and reads the URL at runtime.
+It's bean *selection* by profile/condition that's frozen, not configuration values.
+
+### Living with it
+
+- **Bake in the right profile:** tell AOT which profiles to evaluate at build time —
+  `<profiles>prod</profiles>` on the `process-aot` execution (see [`pom.xml`](pom.xml)) —
+  or build a separate artifact per profile.
+- **Design AOT-friendly:** prefer one bean whose *behavior* varies by a runtime
+  **property** over two beans gated by `@Profile`; property values aren't frozen.
+- **Or just use `jvm-aot`:** most of the startup win, none of the build-time freezing
+  — the safe choice when the bean graph needs to stay dynamic.
+
+This repo's app has no profiles or conditional beans, so `spring-aot` is a clean win
+here; the trade-off only shows up once an app wires beans by profile or condition.
+See [Project Leyden & AOT](#project-leyden--aot-the-jvm-aot-and-spring-aot-images)
+for the background talk.
 
 ## Tutorial
 
