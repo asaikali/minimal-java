@@ -93,6 +93,23 @@ RUN --mount=type=cache,target=/root/.m2 \
     java -Djarmode=tools -jar application.jar extract --layers --destination extracted
 
 # ---------------------------------------------------------------------------
+# build-springaot: same as build, but with Spring AOT processing turned on via
+# the `springaot` Maven profile (-Pspringaot binds the process-aot goal). That
+# generates the bean-arrangement code at build time and compiles it into the
+# jar; the spring-aot image below then runs with -Dspring.aot.enabled=true.
+# Kept as a SEPARATE stage so the plain `build` above (which feeds fat/app/aot)
+# stays untouched. Also pinned to $BUILDPLATFORM: the AOT-generated code is plain
+# bytecode, architecture-independent, so it's built ONCE like the regular jar.
+# ---------------------------------------------------------------------------
+FROM --platform=$BUILDPLATFORM eclipse-temurin:${JAVA_VERSION}-jdk AS build-springaot
+WORKDIR /build
+COPY . .
+RUN --mount=type=cache,target=/root/.m2 \
+    ./mvnw -B -DskipTests -Pspringaot package && \
+    cp target/*.jar application.jar && \
+    java -Djarmode=tools -jar application.jar extract --layers --destination extracted
+
+# ---------------------------------------------------------------------------
 # Image: fat — the naive baseline, shown only for comparison: the Spring Boot
 # fat jar on the FULL official Temurin JRE, with none of the techniques the
 # series applies (no chisel, no layered extract, no AOT, runs as root). This is
@@ -149,3 +166,27 @@ EXPOSE 8080
 RUN ["java", "-XX:AOTCacheOutput=app.aot", "-Dspring.context.exit=onRefresh", "-jar", "application.jar"]
 USER 10001:10001
 ENTRYPOINT ["java", "-XX:AOTCache=app.aot", "-jar", "application.jar"]
+
+# ---------------------------------------------------------------------------
+# Image: spring-aot — the next rung past aot: the same JDK AOT cache PLUS Spring
+# AOT. It uses the Spring-AOT-processed app from the build-springaot stage and
+# adds -Dspring.aot.enabled=true to BOTH the training run and the runtime, so the
+# two techniques stack: Spring AOT replaces reflective bean wiring with generated
+# code (the bean arrangement is frozen at build time), and the JDK AOT cache
+# replays class loading/linking. The training run uses -Dspring.context.exit=
+# onRefresh + -XX:AOTCacheOutput; runtime loads it via -XX:AOTCache. Like aot,
+# the training RUN runs as root to write app.aot, then USER drops to non-root.
+#
+# See the README "Project Leyden & AOT" section for how Spring AOT differs from
+# the JVM's AOT cache.
+# ---------------------------------------------------------------------------
+FROM jre AS spring-aot
+WORKDIR /app
+COPY --from=build-springaot /build/extracted/dependencies/ ./
+COPY --from=build-springaot /build/extracted/spring-boot-loader/ ./
+COPY --from=build-springaot /build/extracted/snapshot-dependencies/ ./
+COPY --from=build-springaot /build/extracted/application/ ./
+EXPOSE 8080
+RUN ["java", "-XX:AOTCacheOutput=app.aot", "-Dspring.aot.enabled=true", "-Dspring.context.exit=onRefresh", "-jar", "application.jar"]
+USER 10001:10001
+ENTRYPOINT ["java", "-XX:AOTCache=app.aot", "-Dspring.aot.enabled=true", "-jar", "application.jar"]

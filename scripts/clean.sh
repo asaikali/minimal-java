@@ -16,10 +16,12 @@ rm_image()     { docker image rm -f "$1" >/dev/null 2>&1 && echo "removed image 
 # Containers the run/startup scripts may strand (they normally --rm themselves,
 # but a crashed or interrupted run can leave one behind).
 rm_container minimal-java-aot
+rm_container minimal-java-spring-aot
 rm_container minimal-java-app
 rm_container bench-fat
 rm_container bench-app
 rm_container bench-aot
+rm_container bench-spring-aot
 
 # The built image series.
 rm_image minimal-java:ubuntu
@@ -27,6 +29,7 @@ rm_image minimal-java:jre
 rm_image minimal-java:fat
 rm_image minimal-java:app
 rm_image minimal-java:aot
+rm_image minimal-java:spring-aot
 
 # The on-demand multi-arch builder.
 docker buildx rm chisel-builder >/dev/null 2>&1 && echo "removed buildx builder chisel-builder" || true

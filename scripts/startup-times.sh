@@ -41,6 +41,7 @@ boot() {
 boot fat
 boot app
 boot aot
+boot spring-aot
 
 echo "=== startup ==="
 printf '%s' "${summary}"

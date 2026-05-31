@@ -15,7 +15,7 @@ focused technique, so you can see what each step costs and what it contributes.
 
 - **~2.5 MB base** — chiseled Ubuntu: no shell, no package manager, `libc6` only.
 - **~119 MB for the whole app** — a complete Spring Boot 4 service.
-- **~3.6× faster startup** — ~1.8 s → ~0.5 s via a JDK 25 AOT cache.
+- **~4.8× faster startup** — ~2.0 s → ~0.4 s via a JDK 25 AOT cache + Spring AOT.
 - **Multi-arch** — `linux/amd64` + `linux/arm64` from one command.
 - **Reproducible & self-contained** — in-container build, pinned versions.
 - **Supply-chain ready** — every image carries an SBOM + SLSA build provenance
@@ -23,12 +23,14 @@ focused technique, so you can see what each step costs and what it contributes.
 
 ## The image series
 
-`build-images.sh` produces five images. `fat` is the naive baseline — the Spring
+`build-images.sh` produces six images. `fat` is the naive baseline — the Spring
 Boot fat jar on the full Temurin JRE, with none of the techniques applied. The
 rest are the chiseled series: `ubuntu` and `jre` build up the runtime in a line,
-then `app` and `aot` are two **sibling** packagings of the same Spring Boot app on
-top of `jre` — `app` favors a smaller image, `aot` trades a larger image for
-faster startup (full `ubuntu:26.04` is shown only for comparison):
+then `app`, `aot`, and `spring-aot` are three **sibling** packagings of the same
+Spring Boot app on top of `jre` — `app` favors a smaller image, `aot` adds a JDK
+AOT cache for faster startup, and `spring-aot` stacks **Spring AOT** on top of the
+AOT cache for the fastest startup (full `ubuntu:26.04` is shown only for
+comparison):
 
 ```
 eclipse-temurin:25-jre (full)
@@ -37,18 +39,20 @@ eclipse-temurin:25-jre (full)
 scratch
 └─ ubuntu    chiseled Ubuntu (base-files + libc6)
    └─ jre     trimmed Temurin JRE 25
-      ├─ app   exploded Spring Boot app           — smaller image
-      └─ aot   app layout + JDK 25 AOT cache      — faster startup, larger image
+      ├─ app         exploded Spring Boot app                — smaller image
+      ├─ aot         app layout + JDK 25 AOT cache           — faster startup
+      └─ spring-aot  aot layout + Spring AOT                 — fastest startup
 ```
 
-| Image                 | Builds on | Adds (the technique)                                                       | Size (amd64) | Startup |
-| --------------------- | --------- | -------------------------------------------------------------------------- | ------------ | ------- |
-| `ubuntu:26.04` (full) | —         | the whole distro, for reference                                            | ~42 MB       | —       |
-| `minimal-java:ubuntu` | `scratch` | Canonical **chisel** — built bottom-up from package *slices* (no shell/apt) | ~2.5 MB     | —       |
-| `minimal-java:jre`    | `:ubuntu` | **trimmed Temurin JRE 25** — standalone launchers removed                  | ~65 MB       | —       |
-| `minimal-java:fat`    | full JRE  | **naive baseline** — fat jar on the full Temurin JRE, no techniques        | ~170 MB      | ~2.2 s  |
-| `minimal-java:app`    | `:jre`    | Spring Boot **layered jar**, exploded into cache-friendly layers           | ~119 MB      | ~1.8 s  |
-| `minimal-java:aot`    | `:jre`    | the app layout **plus** a **JDK 25 AOT cache** (Project Leyden)            | ~146 MB      | ~0.5 s  |
+| Image                     | Builds on | Adds (the technique)                                                       | Size (amd64) | Startup |
+| ------------------------- | --------- | -------------------------------------------------------------------------- | ------------ | ------- |
+| `ubuntu:26.04` (full)     | —         | the whole distro, for reference                                            | ~42 MB       | —       |
+| `minimal-java:ubuntu`     | `scratch` | Canonical **chisel** — built bottom-up from package *slices* (no shell/apt) | ~2.5 MB     | —       |
+| `minimal-java:jre`        | `:ubuntu` | **trimmed Temurin JRE 25** — standalone launchers removed                  | ~65 MB       | —       |
+| `minimal-java:fat`        | full JRE  | **naive baseline** — fat jar on the full Temurin JRE, no techniques        | ~170 MB      | ~2.0 s  |
+| `minimal-java:app`        | `:jre`    | Spring Boot **layered jar**, exploded into cache-friendly layers           | ~119 MB      | ~1.6 s  |
+| `minimal-java:aot`        | `:jre`    | the app layout **plus** a **JDK 25 AOT cache** (Project Leyden)            | ~146 MB      | ~0.5 s  |
+| `minimal-java:spring-aot` | `:jre`    | the `aot` layout **plus Spring AOT** — generated bean wiring                | ~145 MB      | ~0.4 s  |
 
 Under the hood, each image is a named stage in a single multi-stage `Dockerfile`;
 `build-images.sh` builds each one with `docker buildx build --target <name>`,
@@ -81,7 +85,7 @@ Docker Desktop's cluster — both optional, only for their steps.
 
 ### Step 1 — Build the image series
 
-Build all five images (the four chiseled targets plus the `fat` baseline),
+Build all six images (the five chiseled targets plus the `fat` baseline),
 multi-arch for `linux/amd64` + `linux/arm64`:
 
 ```bash
@@ -89,7 +93,8 @@ multi-arch for `linux/amd64` + `linux/arm64`:
 ```
 
 The first run creates an on-demand `chisel-builder` buildx builder, then builds
-each Dockerfile target smallest-first (`ubuntu` → `jre` → `app` → `aot` → `fat`).
+each Dockerfile target smallest-first (`ubuntu` → `jre` → `app` → `aot` →
+`spring-aot` → `fat`).
 You'll see BuildKit progress for each, and because the build is multi-arch, the
 `jre` trim step runs *emulated* for the non-native arch — so that one is
 noticeably slower on its first build. When it finishes it prints the size table
@@ -105,6 +110,7 @@ Size comparison (image size, decimal MB):
   minimal-java:fat (naive)      170.2 MB    168.3 MB
   minimal-java:app              118.7 MB    116.7 MB
   minimal-java:aot              145.6 MB    143.6 MB
+  minimal-java:spring-aot       144.7 MB    142.8 MB
 ```
 
 Read it top-down: full Ubuntu is **~42 MB**, but the chiseled `minimal-java:ubuntu`
@@ -113,6 +119,7 @@ trimmed JRE gets you to `jre`, and the whole Spring Boot app (`app`) lands at
 **~119 MB** — **smaller than the naive `fat` baseline (~170 MB)**, which carries the
 full JRE *and* the unexploded fat jar. `aot` is larger than `app` by design: it
 pays ~27 MB for the AOT cache to buy the startup win you'll measure in Step 4.
+`spring-aot` adds Spring AOT on top of `aot` and lands about the same size (~145 MB).
 
 ### Step 2 — Run it and call the API
 
@@ -144,8 +151,9 @@ User=10001:10001 ReadonlyRootfs=true CapDrop=[ALL]
 ```
 
 Non-root UID, read-only root filesystem, every Linux capability dropped. Swap in
-[`./scripts/run-aot.sh`](scripts/run-aot.sh) to run the fast-startup `aot` image
-instead — same API, same hardening.
+[`./scripts/run-aot.sh`](scripts/run-aot.sh) or
+[`./scripts/run-spring-aot.sh`](scripts/run-spring-aot.sh) to run the fast-startup
+`aot` / `spring-aot` images instead — same API, same hardening.
 
 ### Step 3 — Compare the sizes again
 
@@ -162,8 +170,8 @@ output.
 
 ### Step 4 — Compare startup time
 
-Boot the `fat`, `app`, and `aot` images in turn and print Spring Boot's own
-"Started" line for each:
+Boot the `fat`, `app`, `aot`, and `spring-aot` images in turn and print Spring
+Boot's own "Started" line for each:
 
 ```bash
 ./scripts/startup-times.sh
@@ -171,17 +179,20 @@ Boot the `fat`, `app`, and `aot` images in turn and print Spring Boot's own
 
 ```
 === startup ===
-fat: ... Started Application in 1.955 seconds (process running for 2.221)
-app: ... Started Application in 1.689 seconds (process running for 1.84)
-aot: ... Started Application in 0.538 seconds (process running for 0.705)
+fat: ... Started Application in 1.952 seconds (process running for 2.228)
+app: ... Started Application in 1.627 seconds (process running for 1.79)
+aot: ... Started Application in 0.535 seconds (process running for 0.687)
+spring-aot: ... Started Application in 0.408 seconds (process running for 0.556)
 ```
 
-Two techniques, two jumps. `fat → app` exploding the fat jar into layers drops
+Three techniques, three jumps. `fat → app` exploding the fat jar into layers drops
 the nested-jar classloader overhead. `app → aot` the JDK 25 AOT cache replays the
-class loading/linking recorded during the build-time training run — taking
-startup from **~1.7 s to ~0.5 s, about 3.6× faster than the `fat` baseline**.
-(See [Project Leyden & AOT](#project-leyden--aot-the-aot-image) for how the cache
-is built.)
+class loading/linking recorded during the build-time training run — taking startup
+from **~1.6 s to ~0.5 s**. `aot → spring-aot` Spring AOT replaces reflective bean
+wiring with generated code, shaving it further to **~0.4 s — about 4.8× faster than
+the `fat` baseline**. (Spring AOT's gain stacks on top of the AOT cache; on a larger
+bean graph the gap is wider. See
+[Project Leyden & AOT](#project-leyden--aot-the-aot-and-spring-aot-images) for how both are built.)
 
 ### Step 5 — Compare CVE counts
 
@@ -333,7 +344,7 @@ Combined summary of the key ideas:
     does), or declaratively via Canonical's **Rockcraft** (+ **Pebble** as the init /
     entrypoint), which produces images called "rocks".
 
-### Project Leyden & AOT (the `aot` image)
+### Project Leyden & AOT (the `aot` and `spring-aot` images)
 
 - **[Supercharge your JVM performance with Project Leyden and Spring Boot](https://www.youtube.com/watch?v=UqaSWiE076w)**
   — by **Moritz Halbritter** (Spring Boot engineering team). This recording is the
@@ -371,7 +382,9 @@ Combined summary of the key ideas:
     startup (what cloud providers bill) drops ~2.6x.
   - **Spring AOT** is separate from the JVM's AOT cache: it generates code for the bean
     arrangement (originally for GraalVM native image) and also speeds JVM startup; the
-    trade-off is the bean arrangement is frozen at build time.
+    trade-off is the bean arrangement is frozen at build time. This is what the
+    **`spring-aot`** image adds on top of `aot` (the `-Pspringaot` Maven profile runs
+    `process-aot` at build time, and the image runs with `-Dspring.aot.enabled=true`).
   - **For warm-up (peak throughput), not just startup,** you need a *real* training run
     that exercises hot paths with production-like load — harder to set up than the poor
     man's run. **What's next** in the Leyden prototype: ahead-of-time *code* compilation

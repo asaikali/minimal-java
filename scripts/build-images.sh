@@ -61,6 +61,11 @@ build jre
 build app
 build aot
 
+# spring-aot: the next rung past aot — the JDK AOT cache PLUS Spring AOT. Its
+# build runs Spring's process-aot (the -Pspringaot Maven profile) before the
+# training run, so its build step is a little slower than aot's.
+build spring-aot
+
 # The naive baseline, for the comparison scripts: the fat jar on the full
 # Temurin JRE, with none of the techniques applied.
 build fat

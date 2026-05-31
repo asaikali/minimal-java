@@ -40,7 +40,7 @@ if [[ -z "${DEST}" ]]; then
 fi
 
 # Same series as build-images.sh, smallest first.
-TARGETS=(ubuntu jre app aot)
+TARGETS=(ubuntu jre app aot spring-aot)
 
 echo "Pushing minimal-java:* -> ${DEST}:*"
 

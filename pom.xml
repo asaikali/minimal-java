@@ -62,4 +62,38 @@
         </plugins>
     </build>
 
+    <profiles>
+        <!--
+            Spring AOT (JVM, not native): opt-in via `-Pspringaot`. Binds the
+            spring-boot-maven-plugin's process-aot goal (default phase
+            prepare-package), which runs the application's AOT engine at build
+            time to generate the bean-arrangement code + reachability metadata
+            and compile it into the jar. At runtime it's activated with
+            -Dspring.aot.enabled=true. This is separate from the JVM/Leyden AOT
+            cache; the Dockerfile's `spring-aot` image stacks both. Kept in a
+            profile so the default build (and the build.yml CI) are unaffected —
+            Spring AOT freezes the bean arrangement at build time, so it's a
+            deliberate opt-in, not the default.
+        -->
+        <profile>
+            <id>springaot</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>process-aot</id>
+                                <goals>
+                                    <goal>process-aot</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
 </project>
