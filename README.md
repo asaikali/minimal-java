@@ -24,13 +24,10 @@ focused technique, so you can see what each step costs and what it contributes.
 ## The image series
 
 `build-images.sh` produces six images. `fat` is the naive baseline — the Spring
-Boot fat jar on the full Temurin JRE, with none of the techniques applied. The
-rest are the chiseled series: `ubuntu` and `jre` build up the runtime in a line,
-then `app`, `jvm-aot`, and `spring-aot` are three **sibling** packagings of the same
-Spring Boot app on top of `jre` — `app` favors a smaller image, `jvm-aot` adds a JDK
-AOT cache for faster startup, and `spring-aot` stacks **Spring AOT** on top of the
-AOT cache for the fastest startup (full `ubuntu:26.04` is shown only for
-comparison):
+Boot fat jar on the full Temurin JRE, no techniques applied. The other five are the
+chiseled series, built bottom-up: a tiny `ubuntu` base, a trimmed `jre` on top, then
+three **sibling** packagings of the same app — `app`, `jvm-aot`, and `spring-aot`.
+The tree and table below show how they stack and what each adds:
 
 ```
 eclipse-temurin:25-jre (full)
