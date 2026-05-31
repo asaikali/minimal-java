@@ -35,7 +35,7 @@ jobs:
       # Java 25 to match <java.version> in pom.xml. cache: maven restores the
       # ~/.m2 repository between runs so dependencies aren't re-downloaded.
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
