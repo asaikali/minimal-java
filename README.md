@@ -224,7 +224,7 @@ the base — exactly what you'd then triage by updating dependencies.
 
 ### Step 6 — Deploy to Kubernetes (optional)
 
-[`k8s/deployment.yaml`](k8s/deployment.yaml) runs `minimal-java:jvm-aot` on Docker
+[`k8s/deployment.yaml`](k8s/deployment.yaml) runs `minimal-java:spring-aot` on Docker
 Desktop's Kubernetes, carrying the same hardening as Step 2 (non-root, read-only
 root filesystem, all capabilities dropped) plus `httpGet` probes — there's no
 shell in the image to run an exec health check. It uses the image you built
