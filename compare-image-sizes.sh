@@ -2,8 +2,8 @@
 #
 # Size comparison for the images built by ./build-image.sh: the full Ubuntu base
 # and the naive fat-jar image vs the chiseled series, as a tidy per-architecture
-# table. The security/startup analogues are compare-cve-counts.sh and
-# compare-startup-times.sh.
+# table. The security/startup analogues are compare-cve-counts-{trivy,scout}.sh
+# and compare-startup-times.sh.
 #
 # Sizes come from `docker image inspect --platform ... --format '{{.Size}}'` (the
 # image's content size, in bytes) — a stable machine interface, so there's no
