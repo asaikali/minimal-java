@@ -3,16 +3,16 @@
 # =============================================================================
 #
 # The "package the software" pipelines. One matrix job per runtime image; each
-# pulls the pre-built jar artifact (oras) and builds FROM the published jre base
+# pulls the pre-built jar artifact (oras) and builds FROM the published golden-jre base
 # pinned by DIGEST, then publishes ghcr.io/<owner>/<repo>/<name>. Nothing is
 # recompiled here — the jar came from the Artifact pipeline, the base from the
 # Base Images pipeline. The registry is the hand-off point between all three.
 #
 #   fat        : full Temurin JRE + the plain jar (the naive baseline / Part 1 of the
 #                tutorial: the simplest end-to-end pipeline; published like the rest)
-#   app        : jre base + the exploded plain jar
+#   app        : golden-jre base + the exploded plain jar
 #   jvm-aot    : app + a JDK AOT cache (training run; arch-specific, emulated for arm64)
-#   spring-aot : jre base + the exploded Spring-AOT jar + a JDK AOT cache
+#   spring-aot : golden-jre base + the exploded Spring-AOT jar + a JDK AOT cache
 #
 # Runs after Base Images OR Artifact finishes on main (whichever reshipped an
 # input), and on demand. On a pull request it build-validates the changed image
@@ -97,14 +97,14 @@ jobs:
         uses: oras-project/setup-oras@v1
 
       # Pull the jar into the build context (Dockerfiles just COPY application.jar),
-      # and for runtime-on-jre images resolve the jre base to an immutable digest.
+      # and for runtime-on-golden-jre images resolve the golden-jre base to an immutable digest.
       - name: Resolve build inputs
         run: |
           mkdir -p ctx
           oras pull "${IMAGE_BASE}/jar:${{ matrix.jar }}" --output ctx
           if [[ "${{ matrix.base }}" == "true" ]]; then
-            digest="$(docker buildx imagetools inspect "${IMAGE_BASE}/jre:latest" --format '{{.Manifest.Digest}}')"
-            echo "BUILD_ARGS=JRE_BASE=${IMAGE_BASE}/jre@${digest}" >> "$GITHUB_ENV"
+            digest="$(docker buildx imagetools inspect "${IMAGE_BASE}/golden-jre:latest" --format '{{.Manifest.Digest}}')"
+            echo "BUILD_ARGS=JRE_BASE=${IMAGE_BASE}/golden-jre@${digest}" >> "$GITHUB_ENV"
           fi
 
       - name: Build and push ${{ matrix.name }}

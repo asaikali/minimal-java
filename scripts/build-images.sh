@@ -5,17 +5,17 @@
 # work with. This drives the same three stages CI runs as separate pipelines,
 # but wired together on one machine:
 #
-#   base images      images/2-size/ubuntu -> minimal-java/ubuntu:local
-#                    images/2-size/jre    -> minimal-java/jre:local  (FROM the ubuntu base)
+#   base images      images/2-size/golden-ubuntu -> minimal-java/golden-ubuntu:local
+#                    images/2-size/golden-jre    -> minimal-java/golden-jre:local  (FROM the golden-ubuntu base)
 #   artifact         mvn package x2       -> stage/{plain,springaot}/application.jar
 #   runtime images   images/1-naive/fat       (full JRE + the plain jar — naive baseline)
-#                    images/2-size/app        (jre base + exploded plain jar)
+#                    images/2-size/app        (golden-jre base + exploded plain jar)
 #                    images/3-speed/jvm-aot   (app + JDK AOT cache)
 #                    images/3-speed/spring-aot (Spring-AOT jar + JDK AOT cache)
 #
 # In CI the registry (ghcr.io) is the hand-off point between these stages, with
 # everything pinned by digest. Locally the hand-off is the daemon's image store:
-# each runtime image is built FROM the jre base's local tag, and the jar arrives
+# each runtime image is built FROM the golden-jre base's local tag, and the jar arrives
 # pre-built in a tiny build context (stage/<variant>/) instead of via `oras pull`.
 #
 # Each image is built multi-arch (linux/amd64 + linux/arm64) and loaded into the
@@ -70,9 +70,9 @@ build() {  # $1 = image name (tag), $2 = image dir (holds the Dockerfile), $3 = 
 
 # 1. Base images (2-size). The jre build runs a RUN step (trimming the JRE
 #    launchers) that executes emulated for the non-native arch, so it's slower
-#    than ubuntu. jre is built FROM the ubuntu base's local tag.
-build ubuntu images/2-size/ubuntu images/2-size/ubuntu
-build jre    images/2-size/jre    images/2-size/jre --build-arg "UBUNTU_BASE=${NS}/ubuntu:local"
+#    than golden-ubuntu. golden-jre is built FROM the golden-ubuntu base's local tag.
+build golden-ubuntu images/2-size/golden-ubuntu images/2-size/golden-ubuntu
+build golden-jre    images/2-size/golden-jre    images/2-size/golden-jre --build-arg "UBUNTU_BASE=${NS}/golden-ubuntu:local"
 
 # 2. Artifact. Build the plain + Spring-AOT jars once and stage them under
 #    stage/{plain,springaot}/application.jar (the runtime builds' contexts).
@@ -80,11 +80,11 @@ build jre    images/2-size/jre    images/2-size/jre --build-arg "UBUNTU_BASE=${N
 
 # 3. Runtime images, each consuming a staged jar as context.
 #    fat (1-naive) is the baseline (full Temurin JRE, plain jar, no techniques);
-#    app (2-size) and the AOT images (3-speed) build FROM the jre base.
+#    app (2-size) and the AOT images (3-speed) build FROM the golden-jre base.
 build fat        images/1-naive/fat        stage/plain
-build app        images/2-size/app         stage/plain     --build-arg "JRE_BASE=${NS}/jre:local"
-build jvm-aot    images/3-speed/jvm-aot    stage/plain     --build-arg "JRE_BASE=${NS}/jre:local"
-build spring-aot images/3-speed/spring-aot stage/springaot --build-arg "JRE_BASE=${NS}/jre:local"
+build app        images/2-size/app         stage/plain     --build-arg "JRE_BASE=${NS}/golden-jre:local"
+build jvm-aot    images/3-speed/jvm-aot    stage/plain     --build-arg "JRE_BASE=${NS}/golden-jre:local"
+build spring-aot images/3-speed/spring-aot stage/springaot --build-arg "JRE_BASE=${NS}/golden-jre:local"
 
 # Size comparison: full Ubuntu base vs each chiseled image, side by side.
 # Delegated to image-sizes.sh, which is also runnable on its own.

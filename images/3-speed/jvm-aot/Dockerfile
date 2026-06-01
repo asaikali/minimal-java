@@ -3,7 +3,7 @@
 # Tutorial: docs/3-speed.md (Part 3 — a faster app).
 
 # ===========================================================================
-# Runtime image: jvm-aot — a sibling of app on the jre base: the same exploded
+# Runtime image: jvm-aot — a sibling of app on the golden-jre base: the same exploded
 # app PLUS a JDK AOT cache, trading a larger image for faster startup.
 # ===========================================================================
 # A build-time "training run" starts the app, lets Spring refresh the context,
@@ -24,7 +24,7 @@
 # team): "Supercharge your JVM performance with Project Leyden and Spring Boot"
 # by Moritz Halbritter, 2026-02-10 — https://www.youtube.com/watch?v=UqaSWiE076w
 ARG JAVA_VERSION=25
-ARG JRE_BASE=minimal-java/jre:local
+ARG JRE_BASE=minimal-java/golden-jre:local
 
 # extract: explode the layered jar (architecture-independent; see images/app).
 FROM --platform=$BUILDPLATFORM eclipse-temurin:${JAVA_VERSION}-jre AS extract

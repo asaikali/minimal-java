@@ -49,8 +49,8 @@ fi
 # Same series push-images.sh publishes, plus the jar OCI artifact
 # publish-artifact.sh pushes.
 REFS=(
-  "${DEST}/ubuntu:latest"
-  "${DEST}/jre:latest"
+  "${DEST}/golden-ubuntu:latest"
+  "${DEST}/golden-jre:latest"
   "${DEST}/fat:latest"
   "${DEST}/app:latest"
   "${DEST}/jvm-aot:latest"

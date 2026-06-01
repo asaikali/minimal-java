@@ -28,8 +28,8 @@ rm_container bench-jvm-aot
 rm_container bench-spring-aot
 
 # The built image series.
-rm_image minimal-java/ubuntu:local
-rm_image minimal-java/jre:local
+rm_image minimal-java/golden-ubuntu:local
+rm_image minimal-java/golden-jre:local
 rm_image minimal-java/fat:local
 rm_image minimal-java/app:local
 rm_image minimal-java/jvm-aot:local

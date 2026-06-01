@@ -4,7 +4,7 @@
 # is the local/manual publish path; in CI the base-images.yml and containerize.yml
 # workflows push these same images (and publish-artifact.sh / artifact.yml push
 # the jar). Each image gets its own repository under the namespace:
-# ghcr.io/<owner>/<repo>/<name> (e.g. .../minimal-java/jre).
+# ghcr.io/<owner>/<repo>/<name> (e.g. .../minimal-java/golden-jre).
 #
 # build-images.sh builds the series multi-arch and loads it into the local Docker
 # image store as minimal-java/<name>:local. This script retags each of those local
@@ -48,7 +48,7 @@ TAG="${2:-latest}"
 
 # Same series as build-images.sh, smallest first. fat (the naive baseline) is
 # published too — it's Part 1's end-to-end pipeline example.
-TARGETS=(ubuntu jre fat app jvm-aot spring-aot)
+TARGETS=(golden-ubuntu golden-jre fat app jvm-aot spring-aot)
 
 echo "Pushing minimal-java/*:local -> ${DEST}/*:${TAG}"
 

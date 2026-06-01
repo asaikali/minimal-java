@@ -15,7 +15,7 @@ It also introduces a new pipeline — because once we stop using the upstream fu
 
 ## Move 1 — a chiseled Ubuntu base (and the base-images pipeline)
 
-[`images/2-size/ubuntu/Dockerfile`](../images/2-size/ubuntu) builds a base from **scratch** using
+[`images/2-size/golden-ubuntu/Dockerfile`](../images/2-size/golden-ubuntu) builds a base from **scratch** using
 Canonical's [**chisel**](https://github.com/canonical/chisel): instead of inflating a
 full distro and trimming it, it assembles a filesystem from **slices** of Ubuntu
 packages — here just `base-files` and `libc6_libs`. The result is the *real* Ubuntu
@@ -25,31 +25,42 @@ bits, but **no shell, no package manager, nothing** beyond what we asked for: ~2
 Now we do — so a dedicated **base-images pipeline**
 ([`base-images.yml`](../.github/workflows/base-images.yml)) owns it, the way a platform
 team publishes golden base images on their own schedule. It publishes
-`ghcr.io/<owner>/<repo>/ubuntu`, then builds the JRE base (Move 2) `FROM` that base
+`ghcr.io/<owner>/<repo>/golden-ubuntu`, then builds the JRE base (Move 2) `FROM` that base
 **pinned by digest**:
 
 ```
-  images/2-size/ubuntu  ──▶  ghcr.io/<owner>/<repo>/ubuntu
-  images/2-size/jre     ──▶  ghcr.io/<owner>/<repo>/jre      (FROM ubuntu@sha256:…)
+  images/2-size/golden-ubuntu  ──▶  ghcr.io/<owner>/<repo>/golden-ubuntu
+  images/2-size/golden-jre     ──▶  ghcr.io/<owner>/<repo>/golden-jre      (FROM golden-ubuntu@sha256:…)
 ```
 
-Pinning by digest (not a floating tag) means the published `jre` records *exactly*
+Pinning by digest (not a floating tag) means the published `golden-jre` records *exactly*
 which base it sits on — the provenance the whole repo is about. Locally,
 `build-images.sh` does the same hand-off through the daemon's image store, and the
 Dockerfile takes an `ARG UBUNTU_BASE` that defaults to the local tag so offline builds
 just work.
 
+That's why they're called **golden** images — they're the platform's owned, named,
+published base *products*, not incidental build artifacts. The same discipline applies
+one level up: each golden image **pins its own upstream root by digest** too —
+`FROM ubuntu:${UBUNTU_VERSION}@sha256:…` and
+`FROM eclipse-temurin:${JAVA_VERSION}-jre@sha256:…` — so the whole chain is reproducible
+end to end, and [Renovate](renovate.md) keeps those digests current automatically.
+(The naive `fat` image from [Part 1](1-pipeline.md) deliberately *doesn't* pin — "the
+baseline doesn't even do this" is part of the point.) A real platform team would publish
+these golden images from a central registry their app teams build on; here they live
+under the same repo's ghcr namespace for simplicity.
+
 ## Move 2 — a trimmed JRE
 
-[`images/2-size/jre/Dockerfile`](../images/2-size/jre) takes the official Temurin JRE, drops the
+[`images/2-size/golden-jre/Dockerfile`](../images/2-size/golden-jre) takes the official Temurin JRE, drops the
 standalone launchers a running service never invokes (`jfr`, `jrunscript`,
 `jwebserver`, `keytool`, `rmiregistry`), and copies just the runtime onto the chiseled
-base. `libc6` (from the ubuntu base) is the only dependency it needs. Result: ~65 MB,
+base. `libc6` (from the golden-ubuntu base) is the only dependency it needs. Result: ~65 MB,
 still no shell or package manager.
 
 ## Move 3 — explode the Spring Boot jar into layers
 
-[`images/2-size/app/Dockerfile`](../images/2-size/app) builds `FROM` the `jre` base and, instead of
+[`images/2-size/app/Dockerfile`](../images/2-size/app) builds `FROM` the `golden-jre` base and, instead of
 copying one fat jar, extracts the Spring Boot **layered** jar and copies each layer
 separately, ordered slowest-changing first:
 
@@ -76,8 +87,8 @@ Size comparison (image size, decimal MB):
 
   image                            amd64       arm64
   ubuntu:26.04 (full)            41.6 MB     40.7 MB
-  minimal-java/ubuntu             2.5 MB      1.7 MB
-  minimal-java/jre               65.4 MB     63.5 MB
+  minimal-java/golden-ubuntu             2.5 MB      1.7 MB
+  minimal-java/golden-jre               65.4 MB     63.5 MB
   minimal-java/fat (naive)      170.2 MB    168.3 MB
   minimal-java/app              118.7 MB    116.7 MB
 ```
@@ -97,14 +108,14 @@ jar. Same application, ~50 MB lighter.
 === CVE summary (Trivy — counts per severity) ===
   image                         C    H    M    L
   ubuntu:26.04                  0    8   56    3
-  minimal-java/ubuntu           0    0    0    0
-  minimal-java/jre              0    0    0    0
+  minimal-java/golden-ubuntu           0    0    0    0
+  minimal-java/golden-jre              0    0    0    0
   minimal-java/fat              3   11   62    4
   minimal-java/app              3    3    0    1
 ```
 
 This is the real payoff. Full `ubuntu:26.04` carries dozens of OS findings; the
-chiseled `ubuntu` and `jre` report **zero** — those packages simply aren't in the
+chiseled `golden-ubuntu` and `golden-jre` report **zero** — those packages simply aren't in the
 image. The naive `fat` inherits the full JRE's OS packages on top of the app's jars
 (62 medium findings alone). `app` keeps the OS at **zero**; its remaining findings live
 in the **Java dependencies**, exactly what you'd triage by updating dependencies — not
@@ -150,7 +161,7 @@ That's [Part 3](3-speed.md).
 <details>
 <summary>Three talks (shortest → longest) + a combined summary of the key ideas</summary>
 
-Three talks explain the tooling behind our chiseled `ubuntu` base image — how to
+Three talks explain the tooling behind our chiseled `golden-ubuntu` base image — how to
 build distroless-style Ubuntu images that keep only the files you need. If you're
 new to chisel, watch them **shortest → longest**; each adds more depth:
 
@@ -196,7 +207,7 @@ Combined summary of the key ideas:
     scanning stays honest.
   - **Production-grade defaults:** the talks argue a production container shouldn't have
     a shell, a package manager, or privileged users, and should be immutable — close to
-    what our `ubuntu`/`jre` images already are. Chisel can also emit a **manifest**
+    what our `golden-ubuntu`/`golden-jre` images already are. Chisel can also emit a **manifest**
     (`manifest.wall`, JSON-lines) listing every file/package/version for SBOMs.
   - **Maintainability pull-through:** slices ride Ubuntu's normal package build/CI, so
     security patches (LTS/ESM) flow into chiseled images like any other Ubuntu update —
@@ -205,7 +216,7 @@ Combined summary of the key ideas:
     base) ~29 MB → **chiseled ~14–16 MB**, with a ~60% CVE reduction, ~20–25% faster
     pull/spin-up, and FIPS/STIG-friendly output.
   - **Two ways to use it:** with a plain multi-stage Dockerfile (`chisel cut` into a
-    rootfs, then `COPY` it onto `scratch` — exactly what this repo's `ubuntu` stage
+    rootfs, then `COPY` it onto `scratch` — exactly what this repo's `golden-ubuntu` image
     does), or declaratively via Canonical's **Rockcraft** (+ **Pebble** as the init /
     entrypoint), which produces images called "rocks".
 

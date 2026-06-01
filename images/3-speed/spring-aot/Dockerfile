@@ -22,7 +22,7 @@
 # See the README "Project Leyden & AOT" section for how Spring AOT differs from
 # the JVM's AOT cache.
 ARG JAVA_VERSION=25
-ARG JRE_BASE=minimal-java/jre:local
+ARG JRE_BASE=minimal-java/golden-jre:local
 
 # extract: explode the layered (Spring-AOT-processed) jar; architecture-
 # independent, so pinned to $BUILDPLATFORM (see images/app).

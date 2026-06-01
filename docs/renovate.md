@@ -45,7 +45,7 @@ small annotation. What's in scope:
 - **Maven wrapper** (`.mvn/wrapper/maven-wrapper.properties`) — the wrapper and
   the Maven distribution it downloads.
 - **Docker base images** (`images/**/Dockerfile`) — `ubuntu:${UBUNTU_VERSION}` (in
-  `images/2-size/ubuntu/Dockerfile`) and `eclipse-temurin:${JAVA_VERSION}-*` (in the jre,
+  `images/2-size/golden-ubuntu/Dockerfile`) and `eclipse-temurin:${JAVA_VERSION}-*` (in the jre,
   fat, app, jvm-aot, and spring-aot Dockerfiles). Renovate's Docker manager scans
   every `Dockerfile` and *detects* these (it resolves the `${ARG}` to read the
   version) but **cannot rewrite an `${ARG}`-composed tag in place** — it looks for
@@ -54,7 +54,17 @@ small annotation. What's in scope:
   `renovate.json` disables those); only a new **major** surfaces on the Dependency
   Dashboard as a heads-up, and you bump `JAVA_VERSION` / `UBUNTU_VERSION` by hand to
   keep the tags clean. chisel is the exception — see below.
-- **chisel** (`images/2-size/ubuntu/Dockerfile`) — fetched from a GitHub *release* URL, not referenced
+- **Golden base image digests** (`images/2-size/golden-{ubuntu,jre}/Dockerfile`) — the
+  two *golden* base images pin their upstream root by **digest** for reproducible
+  builds: `FROM ubuntu:${UBUNTU_VERSION}@sha256:…` and
+  `FROM eclipse-temurin:${JAVA_VERSION}-jre@sha256:…`. Renovate **does** keep those
+  digests current — the Docker manager updates a literal `@sha256` in place even though
+  the *tag* is `${ARG}`-composed (it only can't rewrite the tag). That's why the
+  `packageRules` disable above lists `minor/patch/pin/pinDigest` but **not** `digest`.
+  `pinDigest` stays off so the deliberately-floating naive `fat` and the throwaway
+  `extract` build stages are *not* auto-pinned — only the golden bases that actually
+  ship are.
+- **chisel** (`images/2-size/golden-ubuntu/Dockerfile`) — fetched from a GitHub *release* URL, not referenced
   as an image tag, so the Docker manager can't see it. A `# renovate:` annotation
   above the `CHISEL_VERSION` ARG plus a `customManagers` entry in `renovate.json`
   track it via the `github-releases` datasource.
@@ -226,7 +236,7 @@ Knowing which file a PR touches makes review faster.
    [What Renovate updates here](#what-renovate-updates-here)): patch/minor updates
    are disabled because Renovate can't rewrite the `${ARG}`-composed tags, and a
    new major just appears on the dashboard. Bump `JAVA_VERSION` (in the runtime
-   `images/**/Dockerfile` files) / `UBUNTU_VERSION` (in `images/2-size/ubuntu/Dockerfile`)
+   `images/**/Dockerfile` files) / `UBUNTU_VERSION` (in `images/2-size/golden-ubuntu/Dockerfile`)
    by hand, then rebuild the series locally
    ([`scripts/build-images.sh`](../scripts/build-images.sh)) before committing.
 3. **chisel bumps** — *these do* open PRs (the custom manager edits the
@@ -352,7 +362,7 @@ toggle does **not** apply here — that one only gates `GITHUB_TOKEN`.)
 
 Run `scripts/renovate.sh` and check the "Detected Dependencies" output / log for a
 `canonical/chisel` entry. If it's missing, the `# renovate:` annotation in
-`images/2-size/ubuntu/Dockerfile` and the `customManagers` regex in `renovate.json` have
+`images/2-size/golden-ubuntu/Dockerfile` and the `customManagers` regex in `renovate.json` have
 drifted apart — the comment must sit on the line *immediately above* the
 `ARG CHISEL_VERSION=…` line for the regex to match.
 

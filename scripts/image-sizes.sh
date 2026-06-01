@@ -17,7 +17,7 @@ set -euo pipefail
 
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
-UBUNTU_VERSION="$(sed -n 's/^ARG UBUNTU_VERSION=//p' images/2-size/ubuntu/Dockerfile)"
+UBUNTU_VERSION="$(sed -n 's/^ARG UBUNTU_VERSION=//p' images/2-size/golden-ubuntu/Dockerfile)"
 
 # inspect reads only local images, so pull the full Ubuntu base (both arches)
 # first; the minimal-java/*:local images are already local from the build.
@@ -38,8 +38,8 @@ echo "Size comparison (image size, decimal MB):"
 echo
 printf '  %-26s %11s %11s\n' "image" "amd64" "arm64"
 size "ubuntu:${UBUNTU_VERSION}"     "ubuntu:${UBUNTU_VERSION} (full)"
-size "minimal-java/ubuntu:local"     "minimal-java/ubuntu"
-size "minimal-java/jre:local"        "minimal-java/jre"
+size "minimal-java/golden-ubuntu:local"     "minimal-java/golden-ubuntu"
+size "minimal-java/golden-jre:local"        "minimal-java/golden-jre"
 size "minimal-java/fat:local"        "minimal-java/fat (naive)"
 size "minimal-java/app:local"        "minimal-java/app"
 size "minimal-java/jvm-aot:local"    "minimal-java/jvm-aot"

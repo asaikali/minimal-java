@@ -40,17 +40,17 @@ Work through them in order; each builds on the last. Start at Part 1.
 ## The image series at a glance
 
 Six images. `fat` is the naive baseline; the other five build up bottom-up — a tiny
-`ubuntu` base, a trimmed `jre`, then three packagings of the same app.
+`golden-ubuntu` base, a trimmed `golden-jre`, then three packagings of the same app.
 
 | Image                     | Builds on | Adds (the technique)                                     | Size (amd64) | Startup | Part |
 | ------------------------- | --------- | -------------------------------------------------------- | ------------ | ------- | ---- |
 | `ubuntu:26.04` (full)     | —         | the whole distro, for reference                          | ~42 MB       | —       | —    |
 | `minimal-java/fat`        | full JRE  | the fat jar on the full Temurin JRE — **naive baseline** | ~170 MB      | ~2.0 s  | [1](docs/1-pipeline.md) |
-| `minimal-java/ubuntu`     | `scratch` | Canonical **chisel** — package *slices*, no shell/apt    | ~2.5 MB      | —       | [2](docs/2-size.md) |
-| `minimal-java/jre`        | `ubuntu`  | **trimmed Temurin JRE 25** — launchers removed           | ~65 MB       | —       | [2](docs/2-size.md) |
-| `minimal-java/app`        | `jre`     | Spring Boot **layered jar**, exploded into cache layers  | ~119 MB      | ~1.6 s  | [2](docs/2-size.md) |
-| `minimal-java/jvm-aot`    | `jre`     | a **JDK 25 AOT cache** (Project Leyden)                  | ~146 MB      | ~0.5 s  | [3](docs/3-speed.md) |
-| `minimal-java/spring-aot` | `jre`     | the AOT cache **plus Spring AOT**                        | ~145 MB      | ~0.4 s  | [3](docs/3-speed.md) |
+| `minimal-java/golden-ubuntu`     | `scratch` | Canonical **chisel** — package *slices*, no shell/apt    | ~2.5 MB      | —       | [2](docs/2-size.md) |
+| `minimal-java/golden-jre`        | `golden-ubuntu`  | **trimmed Temurin JRE 25** — launchers removed           | ~65 MB       | —       | [2](docs/2-size.md) |
+| `minimal-java/app`        | `golden-jre`     | Spring Boot **layered jar**, exploded into cache layers  | ~119 MB      | ~1.6 s  | [2](docs/2-size.md) |
+| `minimal-java/jvm-aot`    | `golden-jre`     | a **JDK 25 AOT cache** (Project Leyden)                  | ~146 MB      | ~0.5 s  | [3](docs/3-speed.md) |
+| `minimal-java/spring-aot` | `golden-jre`     | the AOT cache **plus Spring AOT**                        | ~145 MB      | ~0.4 s  | [3](docs/3-speed.md) |
 
 ## How it's built
 
@@ -59,7 +59,7 @@ decoupled pipelines** that hand off through a registry, every input pinned by di
 the way a real platform/app team split the work:
 
 ```
-  BASE IMAGES   images/2-size/{ubuntu,jre}  ──▶  ghcr base layer     (Part 2)
+  BASE IMAGES   images/2-size/{golden-ubuntu,golden-jre}  ──▶  ghcr base layer     (Part 2)
   ARTIFACT      mvn package + oras          ──▶  ghcr.io/…/jar        (Part 1)
   CONTAINERIZE  images/<group>/<name>       ──▶  ghcr.io/…/<name>     (each part)
 ```
@@ -79,7 +79,7 @@ order *is* the journey (`naive → size → speed`):
 ```
 ├── images/              the Dockerfiles, grouped by lesson  → images/README.md
 │   ├── 1-naive/           fat                                (Part 1)
-│   ├── 2-size/            ubuntu, jre, app                   (Part 2)
+│   ├── 2-size/      golden-ubuntu, golden-jre, app                   (Part 2)
 │   └── 3-speed/           jvm-aot, spring-aot                (Part 3)
 ├── src/  pom.xml  mvnw    the Spring Boot application (the constant across all images)
 ├── scripts/             build / publish / compare / run helpers  → scripts/README.md

@@ -8,16 +8,20 @@
 # This is the bottom of the stack: a from-scratch rootfs holding nothing but
 # the Ubuntu base-files and libc6, cut with Canonical's `chisel`. It owns its
 # own lifecycle — built and published independently (ghcr.io/<owner>/
-# minimal-java/ubuntu), then consumed by the jre base image (images/jre).
+# minimal-java/golden-ubuntu), then consumed by the golden-jre base image (images/2-size/golden-jre).
 #
-# Build configuration — override with `--build-arg NAME=value`. These feed the
-# FROM tag (ubuntu:${UBUNTU_VERSION}), the chisel-releases branch
-# (ubuntu-${UBUNTU_VERSION}), and the chisel download. Renovate auto-updates
-# CHISEL_VERSION via the `# renovate:` annotation below (a custom manager in
-# renovate.json edits its ARG line directly). The ubuntu tag is ${ARG}-composed,
-# which Renovate can detect but not rewrite in place — so it's configured to
-# only flag a new MAJOR on the Dependency Dashboard; bump UBUNTU_VERSION by hand
-# to keep the tag clean. See docs/renovate.md.
+# Build configuration — override with `--build-arg NAME=value`. UBUNTU_VERSION feeds
+# both the FROM tag and the chisel-releases branch (ubuntu-${UBUNTU_VERSION}).
+#
+# This is a GOLDEN base image, so its upstream root is PINNED BY DIGEST: the FROM
+# below is `ubuntu:${UBUNTU_VERSION}@sha256:...`, so the same commit always builds on
+# the exact same bytes (reproducibility). Renovate keeps the digest current
+# automatically (the Docker manager updates a literal @sha256 in place even though the
+# tag is ${ARG}-composed; `digest` updates are left enabled in renovate.json). The
+# tag itself is ${ARG}-composed, which Renovate can detect but not rewrite, so a new
+# MAJOR ubuntu still surfaces on the Dependency Dashboard — bump UBUNTU_VERSION (and
+# the digest follows) by hand. CHISEL_VERSION is tracked by a custom regex manager.
+# See docs/renovate.md. (The naive `fat` image, by contrast, stays on a floating tag.)
 ARG UBUNTU_VERSION=26.04
 # renovate: datasource=github-releases depName=canonical/chisel versioning=semver
 ARG CHISEL_VERSION=v1.4.1
@@ -27,7 +31,7 @@ ARG CHISEL_VERSION=v1.4.1
 # New to chisel? 7-min lightboard intro: https://www.youtube.com/watch?v=o8NILnbjhQ4
 # Two deeper talks + a suggested watch order are in the README Resources section.
 # ---------------------------------------------------------------------------
-FROM ubuntu:${UBUNTU_VERSION} AS chisel
+FROM ubuntu:${UBUNTU_VERSION}@sha256:f3d28607ddd78734bb7f71f117f3c6706c666b8b76cbff7c9ff6e5718d46ff64 AS chisel
 
 # TARGETARCH is auto-provided by buildx (amd64/arm64) to pick the chisel binary.
 # UBUNTU_VERSION and CHISEL_VERSION are imported from the globals above — a
