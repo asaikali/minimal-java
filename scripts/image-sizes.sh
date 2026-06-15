@@ -28,8 +28,15 @@ docker pull --quiet --platform linux/arm64 "ubuntu:${UBUNTU_VERSION}" >/dev/null
 # missing image inspects as 0 rather than aborting the run.
 size() {  # $1 = image ref, $2 = label
   local amd64 arm64
-  amd64="$(docker image inspect --platform linux/amd64 "$1" --format '{{.Size}}' 2>/dev/null || echo 0)"
-  arm64="$(docker image inspect --platform linux/arm64 "$1" --format '{{.Size}}' 2>/dev/null || echo 0)"
+  # Keep the `|| =0` OUTSIDE the command substitution: when the image lacks the
+  # requested platform (e.g. a native-only `PLATFORMS=linux/arm64` build), inspect
+  # prints an empty line to stdout *and* exits non-zero. Substituting first strips
+  # that trailing newline to ""; the fallback then yields a clean "0" — folding the
+  # fallback inside would instead concatenate to "\n0", an embedded newline that
+  # breaks awk ("newline in string").
+  amd64="$(docker image inspect --platform linux/amd64 "$1" --format '{{.Size}}' 2>/dev/null)" || amd64=0
+  arm64="$(docker image inspect --platform linux/arm64 "$1" --format '{{.Size}}' 2>/dev/null)" || arm64=0
+  amd64="${amd64:-0}"; arm64="${arm64:-0}"
   awk -v l="$2" -v a="$amd64" -v b="$arm64" \
     'BEGIN { printf "  %-26s %8.1f MB %8.1f MB\n", l, a/1e6, b/1e6 }'
 }
