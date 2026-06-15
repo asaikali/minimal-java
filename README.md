@@ -4,7 +4,7 @@ Experiments in building minimal, secure, and reproducible Java container runtime
 
 A hands-on, teaching-oriented project that takes one ordinary Spring Boot app from a
 naive container to a tiny, hardened, fast-starting one — **one question at a time**,
-through a real CI/CD pipeline. The app is a typical Spring Boot 4 service (Java 25,
+through a real CI/CD pipeline. The app is a typical Spring Boot 4.1.0 service (Java 25,
 Spring MVC + Spring Data JPA / Hibernate over H2 with Flyway) that returns a random
 quote. It's intentionally small so the focus stays on the **build-and-ship pipeline**,
 not the app.
@@ -12,7 +12,7 @@ not the app.
 ## Where it ends up
 
 - **~2.5 MB base** — chiseled Ubuntu: no shell, no package manager, `libc6` only.
-- **~119 MB for the whole app** — vs ~170 MB for the naive baseline.
+- **~114 MB for the whole app** — vs ~165 MB for the naive baseline.
 - **~4.8× faster startup** — ~2.0 s → ~0.4 s via a JDK 25 AOT cache + Spring AOT.
 - **Zero OS CVEs** on the chiseled images; remaining findings live in the app's jars.
 - **Multi-arch** (`linux/amd64` + `linux/arm64`), **digest-pinned**, with an SBOM +
@@ -45,12 +45,12 @@ Six images. `fat` is the naive baseline; the other five build up bottom-up — a
 | Image                     | Builds on | Adds (the technique)                                     | Size (amd64) | Startup | Part |
 | ------------------------- | --------- | -------------------------------------------------------- | ------------ | ------- | ---- |
 | `ubuntu:26.04` (full)     | —         | the whole distro, for reference                          | ~42 MB       | —       | —    |
-| `minimal-java/fat`        | full JRE  | the fat jar on the full Temurin JRE — **naive baseline** | ~170 MB      | ~2.0 s  | [1](docs/1-pipeline.md) |
+| `minimal-java/fat`        | full JRE  | the fat jar on the full Temurin JRE — **naive baseline** | ~165 MB      | ~2.0 s  | [1](docs/1-pipeline.md) |
 | `minimal-java/golden-ubuntu`     | `scratch` | Canonical **chisel** — package *slices*, no shell/apt    | ~2.5 MB      | —       | [2](docs/2-size.md) |
 | `minimal-java/golden-jre`        | `golden-ubuntu`  | **trimmed Temurin JRE 25** — launchers removed           | ~65 MB       | —       | [2](docs/2-size.md) |
-| `minimal-java/app`        | `golden-jre`     | Spring Boot **layered jar**, exploded into cache layers  | ~119 MB      | ~1.6 s  | [2](docs/2-size.md) |
-| `minimal-java/jvm-aot`    | `golden-jre`     | a **JDK 25 AOT cache** (Project Leyden)                  | ~146 MB      | ~0.5 s  | [3](docs/3-speed.md) |
-| `minimal-java/spring-aot` | `golden-jre`     | the AOT cache **plus Spring AOT**                        | ~145 MB      | ~0.4 s  | [3](docs/3-speed.md) |
+| `minimal-java/app`        | `golden-jre`     | Spring Boot **layered jar**, exploded into cache layers  | ~114 MB      | ~1.6 s  | [2](docs/2-size.md) |
+| `minimal-java/jvm-aot`    | `golden-jre`     | a **JDK 25 AOT cache** (Project Leyden)                  | ~140 MB      | ~0.5 s  | [3](docs/3-speed.md) |
+| `minimal-java/spring-aot` | `golden-jre`     | the AOT cache **plus Spring AOT**                        | ~139 MB      | ~0.4 s  | [3](docs/3-speed.md) |
 
 ## How it's built
 

@@ -21,7 +21,7 @@ improve from.
 
 ## The application
 
-A typical Spring Boot 4 service: Java 25, Spring MVC exposing a REST API, backed by
+A typical Spring Boot 4.1.0 service: Java 25, Spring MVC exposing a REST API, backed by
 Spring Data JPA / Hibernate over an H2 database with Flyway migrations. It has one
 endpoint that returns a random quote. It's intentionally small so the focus stays on
 the **build-and-ship pipeline**, not the app.
@@ -110,7 +110,7 @@ $ curl localhost:8080
 {"author":"Vincent Lombardi","id":4,"quote":"Success demands singleness of purpose"}
 ```
 
-A full Spring Boot 4 + JPA + Flyway + H2 service, packaged and answering requests.
+A full Spring Boot 4.1.0 + JPA + Flyway + H2 service, packaged and answering requests.
 
 ## Publish + inspect the supply chain
 
@@ -132,7 +132,7 @@ With no argument these derive `ghcr.io/<owner>/<repo>` from your git remote.
 You now have a working, published, attested pipeline. But `fat` is the *naive*
 baseline:
 
-- It's **~170 MB** — it carries the **full** Temurin JRE plus the whole OS that JRE
+- It's **~165 MB** — it carries the **full** Temurin JRE plus the whole OS that JRE
   image ships on (a shell, a package manager, dozens of OS packages).
 - It runs the **nested-jar fat jar**, the slowest way to start (~2 s — measured in
   [Part 3](3-speed.md)).

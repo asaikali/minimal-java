@@ -23,7 +23,7 @@ ENTRYPOINT ["java", "-XX:AOTCache=app.aot", "-jar", "application.jar"]
 It's framework-agnostic and **freezes nothing** about your app. One wrinkle for the
 pipeline: unlike the jar, the AOT cache is **architecture-specific**, so this training
 run executes on the target arch (a native arm64 runner, or QEMU emulation) — the only
-place in the series where packaging runs Java per-arch. Cost: ~27 MB larger than `app`,
+place in the series where packaging runs Java per-arch. Cost: ~26 MB larger than `app`,
 to buy the startup win.
 
 ## spring-aot — add Spring AOT on top
@@ -154,8 +154,8 @@ curl localhost:30080                  # -> a random quote
 kubectl delete -f k8s/deployment.yaml
 ```
 
-That's the whole journey: a Spring Boot app taken from a naive 170 MB / ~2 s container
-to a ~145 MB, zero-OS-CVE, hardened, ~0.4 s one — each step built and published through
+That's the whole journey: a Spring Boot app taken from a naive 165 MB / ~2 s container
+to a ~139 MB, zero-OS-CVE, hardened, ~0.4 s one — each step built and published through
 a real, digest-pinned pipeline.
 
 ## Clean up

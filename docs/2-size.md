@@ -2,7 +2,7 @@
 
 > **minimal-java tutorial** · [← Part 1](1-pipeline.md) · **Part 2** · [Part 3 — a faster app →](3-speed.md) · [↑ Overview](../README.md)
 
-[Part 1](1-pipeline.md) shipped `fat`: ~170 MB, the full Temurin JRE on a full OS,
+[Part 1](1-pipeline.md) shipped `fat`: ~165 MB, the full Temurin JRE on a full OS,
 running as root. The app is fine — the **packaging** is wasteful. This part answers
 **"can the image be better?"** with three moves that don't touch the application:
 
@@ -87,15 +87,15 @@ Size comparison (image size, decimal MB):
 
   image                            amd64       arm64
   ubuntu:26.04 (full)            41.6 MB     40.7 MB
-  minimal-java/golden-ubuntu             2.5 MB      1.7 MB
-  minimal-java/golden-jre               65.4 MB     63.5 MB
-  minimal-java/fat (naive)      170.2 MB    168.3 MB
-  minimal-java/app              118.7 MB    116.7 MB
+  minimal-java/golden-ubuntu      2.5 MB      1.7 MB
+  minimal-java/golden-jre        65.4 MB     63.5 MB
+  minimal-java/fat (naive)      165.5 MB    163.6 MB
+  minimal-java/app              114.0 MB    112.0 MB
 ```
 
 Full Ubuntu is **~42 MB**; the chiseled base is **~2.5 MB** — same real bits, only the
-slices we asked for. The whole app (`app`) lands at **~119 MB**, **smaller than the
-naive `fat` baseline (~170 MB)** which carried the full JRE *and* the unexploded fat
+slices we asked for. The whole app (`app`) lands at **~114 MB**, **smaller than the
+naive `fat` baseline (~165 MB)** which carried the full JRE *and* the unexploded fat
 jar. Same application, ~50 MB lighter.
 
 ## Measure it — CVEs
