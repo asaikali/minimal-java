@@ -24,7 +24,7 @@
 # See docs/renovate.md. (The naive `fat` image, by contrast, stays on a floating tag.)
 ARG UBUNTU_VERSION=26.04
 # renovate: datasource=github-releases depName=canonical/chisel versioning=semver
-ARG CHISEL_VERSION=v1.4.1
+ARG CHISEL_VERSION=v1.5.0
 
 # ---------------------------------------------------------------------------
 # chisel: cut the Ubuntu package slices into a minimal rootfs.
