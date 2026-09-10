@@ -31,7 +31,7 @@ ARG CHISEL_VERSION=v1.4.1
 # New to chisel? 7-min lightboard intro: https://www.youtube.com/watch?v=o8NILnbjhQ4
 # Two deeper talks + a suggested watch order are in the README Resources section.
 # ---------------------------------------------------------------------------
-FROM ubuntu:${UBUNTU_VERSION}@sha256:f3d28607ddd78734bb7f71f117f3c6706c666b8b76cbff7c9ff6e5718d46ff64 AS chisel
+FROM ubuntu:${UBUNTU_VERSION}@sha256:513c074113a871b51a8d16ab445c88779d6452d937a164fb5cc479f32668a41d AS chisel
 
 # TARGETARCH is auto-provided by buildx (amd64/arm64) to pick the chisel binary.
 # UBUNTU_VERSION and CHISEL_VERSION are imported from the globals above — a
