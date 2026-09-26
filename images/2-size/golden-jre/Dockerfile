@@ -26,7 +26,7 @@ ARG UBUNTU_BASE=minimal-java/golden-ubuntu:local
 # running app never invokes, leaving only bin/java. Done here (the JRE image
 # has a shell) since the final image is chiseled and shell-less.
 # ---------------------------------------------------------------------------
-FROM eclipse-temurin:${JAVA_VERSION}-jre@sha256:04262e8782d6b034ee5d7c1c5d4e8938fcf2063a76b4bfcd84e5d994d09c27bc AS jre-dist
+FROM eclipse-temurin:${JAVA_VERSION}-jre@sha256:8da0490fa9a3c26867012019565948eef0ee69438f5c75ac28146967bae984b5 AS jre-dist
 RUN cd /opt/java/openjdk/bin && \
     rm -f jfr jrunscript jwebserver keytool rmiregistry
 
